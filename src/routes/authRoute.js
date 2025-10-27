@@ -112,6 +112,7 @@ router.post('/signup', async (req, res) => {
 });
 
 // Login endpoint
+// Login endpoint
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -123,17 +124,9 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Find user
+    // Find user - remove the include temporarily
     const user = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        company: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
+      where: { email }
     });
 
     if (!user) {
@@ -148,6 +141,18 @@ router.post('/login', async (req, res) => {
     if (!isValidPassword) {
       return res.status(401).json({ 
         error: 'Invalid credentials' 
+      });
+    }
+
+    // Fetch company separately (if exists)
+    let company = null;
+    if (user.companyId) {
+      company = await prisma.company.findUnique({
+        where: { id: user.companyId },
+        select: {
+          id: true,
+          name: true
+        }
       });
     }
 
@@ -169,7 +174,10 @@ router.post('/login', async (req, res) => {
     res.status(200).json({
       message: 'Login successful',
       token,
-      user: userWithoutPassword
+      user: {
+        ...userWithoutPassword,
+        company: company
+      }
     });
 
   } catch (error) {

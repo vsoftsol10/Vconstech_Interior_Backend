@@ -10,21 +10,21 @@ datasource db {
 
 //---User: Admin and Site Engineer---
 model User {
-  id          Int      @id @default(autoincrement())
-  name        String
-  email       String   @unique
-  password    String
-  role        Role
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  assignments   ProjectAssignment[]
-  materialUsage MaterialUsage[]
-  files         File[]
-  createdAt     DateTime @default(now())
-
-  @@index([companyId])
-  @@index([email])
+  id                    String             @id @default(uuid())
+  name                  String
+  email                 String             @unique
+  password              String
+  role                  String
+  companyId             String?
+  company               Company?           @relation(fields: [companyId], references: [id])
+  
+  // Add reverse relations
+  projectAssignments    ProjectAssignment[]
+  materialUsages        MaterialUsage[]
+  uploadedFiles         File[]
+  
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 }
 
 enum Role {
@@ -34,25 +34,25 @@ enum Role {
 
 //--- Projects ---
 model Project {
-  id                 Int           @id @default(autoincrement())
-  projectId          String        @unique   // e.g., "PRJ005"
+  id                 Int                    @id @default(autoincrement())
+  projectId          String                 @unique
   name               String
   clientName         String
-  projectType        String        // "Residential", "Commercial", etc.
+  projectType        String
   budget             Float?
   description        String?
   startDate          DateTime?
   endDate            DateTime?
-  status             ProjectStatus @default(ONGOING)
-  companyId          Int
-  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status             ProjectStatus          @default(ONGOING)
+  companyId          String
+  company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   assignments        ProjectAssignment[]
   materialUsed       MaterialUsage[]
   contracts          Contract[]
   finances           FinancialTransaction[]
   files              File[]
-  createdAt          DateTime      @default(now())
+  createdAt          DateTime               @default(now())
 
   @@index([companyId])
   @@index([projectId])
@@ -69,26 +69,26 @@ enum ProjectStatus {
 model ProjectAssignment {
   id         Int      @id @default(autoincrement())
   projectId  Int
-  userId     Int
+  userId     String   // Changed from Int to String
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedAt DateTime @default(now())
 
-  @@unique([projectId, userId]) // Prevent duplicate assignments
+  @@unique([projectId, userId])
   @@index([projectId])
   @@index([userId])
 }
 
 // --- Materials ---
 model Material {
-  id        Int      @id @default(autoincrement())
+  id        Int              @id @default(autoincrement())
   name      String
   type      String
-  unit      String   // e.g., "kg", "liters", "pieces"
-  companyId Int
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit      String
+  companyId String           // Changed from Int to String
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   usage     MaterialUsage[]
-  createdAt DateTime @default(now())
+  createdAt DateTime         @default(now())
 
   @@index([companyId])
 }
@@ -98,7 +98,7 @@ model MaterialUsage {
   id         Int      @id @default(autoincrement())
   materialId Int
   projectId  Int
-  userId     Int
+  userId     String   // Changed from Int to String
   quantity   Float
   date       DateTime @default(now())
 
@@ -151,7 +151,7 @@ enum TransactionType {
 model File {
   id         Int      @id @default(autoincrement())
   projectId  Int
-  uploadedBy Int
+  uploadedBy String   // Changed from Int to String
   fileUrl    String
   fileName   String?
   uploadedAt DateTime @default(now())
@@ -165,10 +165,33 @@ model File {
 
 // --- Company ---
 model Company {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
+  id        String     @id @default(uuid())  // Changed from Int to String
+  name      String
   users     User[]
   projects  Project[]
   materials Material[]
+  engineers Engineer[]
   createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("companies")
+}
+
+// --- Engineer ---
+model Engineer {
+  id             Int      @id @default(autoincrement())
+  name           String
+  empId          String
+  phone          String
+  alternatePhone String?
+  address        String   @db.Text
+  profileImage   String?
+  companyId      String   // Changed from Int to String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([empId, companyId])
+  @@index([companyId])
+  @@map("engineers")
 }

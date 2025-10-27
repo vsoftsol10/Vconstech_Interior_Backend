@@ -2,10 +2,17 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './src/routes/authRoute.js';
 import projectRoutes from './src/routes/projectRoute.js';
+import engineerRoutes from './src/routes/engineerRoute.js';
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { PrismaClient } from './generated/prisma/index.js';
+
+// ES module dirname workaround
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -18,9 +25,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files for uploaded images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/engineers', engineerRoutes);
 
 // Protected route - any authenticated user
 app.get('/api/profile', authenticateToken, (req, res) => {
@@ -86,6 +97,21 @@ app.get('/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  
+  // Handle multer errors
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'File size too large. Maximum size is 5MB' 
+      });
+    }
+    return res.status(400).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+  
   res.status(500).json({ 
     error: 'Something went wrong!',
     details: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -101,3 +127,5 @@ process.on('SIGINT', async () => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+export default app;
