@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//---User: Admin and Site Engineer---
+model User {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   @unique
+  password    String
+  role        Role
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  assignments   ProjectAssignment[]
+  materialUsage MaterialUsage[]
+  files         File[]
+  createdAt     DateTime @default(now())
+
+  @@index([companyId])
+  @@index([email])
+}
+
+enum Role {
+  Admin
+  Site_Engineer
+}
+
+//--- Projects ---
+model Project {
+  id                 Int           @id @default(autoincrement())
+  projectId          String        @unique   // e.g., "PRJ005"
+  name               String
+  clientName         String
+  projectType        String        // "Residential", "Commercial", etc.
+  budget             Float?
+  description        String?
+  startDate          DateTime?
+  endDate            DateTime?
+  status             ProjectStatus @default(ONGOING)
+  companyId          Int
+  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  assignments        ProjectAssignment[]
+  materialUsed       MaterialUsage[]
+  contracts          Contract[]
+  finances           FinancialTransaction[]
+  files              File[]
+  createdAt          DateTime      @default(now())
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  PENDING
+  ONGOING
+  COMPLETED
+}
+
+// -- Assign Site Engineer to Projects ---
+model ProjectAssignment {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  userId     Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([projectId, userId]) // Prevent duplicate assignments
+  @@index([projectId])
+  @@index([userId])
+}
+
+// --- Materials ---
+model Material {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String
+  unit      String   // e.g., "kg", "liters", "pieces"
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  usage     MaterialUsage[]
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+//---Track Material Usage by Site Engineer ---
+model MaterialUsage {
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  projectId  Int
+  userId     Int
+  quantity   Float
+  date       DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([materialId])
+  @@index([userId])
+  @@index([date])
+}
+
+// --- Contracts ---
+model Contract {
+  id             Int      @id @default(autoincrement())
+  projectId      Int
+  contractorName String
+  details        String?
+  startDate      DateTime
+  endDate        DateTime
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([projectId])
+}
+
+// --- FinancialTransaction ---
+model FinancialTransaction {
+  id          Int             @id @default(autoincrement())
+  projectId   Int
+  type        TransactionType
+  amount      Float
+  description String?
+  date        DateTime        @default(now())
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
+  @@index([date])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  BUDGET
+}
+
+// --- Files/Documents ---
+model File {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  uploadedBy Int
+  fileUrl    String
+  fileName   String?
+  uploadedAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([uploadedBy])
+}
+
+// --- Company ---
+model Company {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  users     User[]
+  projects  Project[]
+  materials Material[]
+  createdAt DateTime   @default(now())
+}
