@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import authRoutes from './src/routes/authRoute.js';
 import projectRoutes from './src/routes/projectRoute.js';
 import engineerRoutes from './src/routes/engineerRoute.js';
+import userRoute from './src/routes/userRoute.js';
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { PrismaClient } from './generated/prisma/index.js';
 
@@ -32,7 +33,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/engineers', engineerRoutes);
-
+app.use('/api/users', userRoute);
 // Protected route - any authenticated user
 app.get('/api/profile', authenticateToken, (req, res) => {
   res.json({ user: req.user });
