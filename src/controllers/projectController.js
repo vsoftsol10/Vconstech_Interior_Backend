@@ -15,6 +15,7 @@ export const createProject = async (req, res) => {
       description,
       startDate,
       endDate,
+      location,
       assignedUserId
     } = req.body;
 
@@ -22,6 +23,18 @@ export const createProject = async (req, res) => {
     if (!projectId || !name || !clientName) {
       return res.status(400).json({ 
         error: 'Project ID, name, and client name are required' 
+      });
+    }
+
+    if (!location) {
+      return res.status(400).json({ 
+        error: 'Project location is required' 
+      });
+    }
+
+    if (!assignedUserId) {
+      return res.status(400).json({ 
+        error: 'Site Engineer assignment is required' 
       });
     }
 
@@ -33,6 +46,21 @@ export const createProject = async (req, res) => {
     if (existingProject) {
       return res.status(400).json({ 
         error: 'Project ID already exists' 
+      });
+    }
+
+    // Verify assigned user exists and is a Site Engineer
+    const assignedUser = await prisma.user.findFirst({
+      where: {
+        id: parseInt(assignedUserId),
+        role: 'Site_Engineer',
+        companyId: req.user.companyId
+      }
+    });
+
+    if (!assignedUser) {
+      return res.status(400).json({ 
+        error: 'Invalid Site Engineer selected' 
       });
     }
 
@@ -48,6 +76,7 @@ export const createProject = async (req, res) => {
         projectType: projectType || 'Residential',
         budget: budget ? parseFloat(budget) : null,
         description,
+        location,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         status: 'PENDING',
@@ -55,19 +84,36 @@ export const createProject = async (req, res) => {
       }
     });
 
-    // If employee is assigned, create assignment
-    if (assignedUserId) {
-      await prisma.projectAssignment.create({
-        data: {
-          projectId: project.id,
-          userId: parseInt(assignedUserId)
+    // Create assignment
+    await prisma.projectAssignment.create({
+      data: {
+        projectId: project.id,
+        userId: parseInt(assignedUserId)
+      }
+    });
+
+    // Fetch the created project with relations
+    const createdProject = await prisma.project.findUnique({
+      where: { id: project.id },
+      include: {
+        assignments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true
+              }
+            }
+          }
         }
-      });
-    }
+      }
+    });
 
     res.status(201).json({
       message: 'Project created successfully',
-      project
+      project: createdProject
     });
 
   } catch (error) {
@@ -228,6 +274,7 @@ export const updateProject = async (req, res) => {
       description,
       startDate,
       endDate,
+      location,
       status,
       assignedUserId
     } = req.body;
@@ -246,6 +293,23 @@ export const updateProject = async (req, res) => {
       });
     }
 
+    // Verify assigned user if provided
+    if (assignedUserId) {
+      const assignedUser = await prisma.user.findFirst({
+        where: {
+          id: parseInt(assignedUserId),
+          role: 'Site_Engineer',
+          companyId: req.user.companyId
+        }
+      });
+
+      if (!assignedUser) {
+        return res.status(400).json({ 
+          error: 'Invalid Site Engineer selected' 
+        });
+      }
+    }
+
     // Update project
     const updateData = {};
     
@@ -254,6 +318,7 @@ export const updateProject = async (req, res) => {
     if (projectType) updateData.projectType = projectType;
     if (budget !== undefined) updateData.budget = budget ? parseFloat(budget) : null;
     if (description !== undefined) updateData.description = description;
+    if (location !== undefined) updateData.location = location;
     if (startDate) updateData.startDate = new Date(startDate);
     if (endDate) updateData.endDate = new Date(endDate);
     if (status) updateData.status = status;
@@ -294,9 +359,28 @@ export const updateProject = async (req, res) => {
       }
     }
 
+    // Fetch updated project with relations
+    const updatedProject = await prisma.project.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        assignments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true
+              }
+            }
+          }
+        }
+      }
+    });
+
     res.json({
       message: 'Project updated successfully',
-      project
+      project: updatedProject
     });
 
   } catch (error) {

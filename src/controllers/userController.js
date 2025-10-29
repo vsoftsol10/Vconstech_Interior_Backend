@@ -12,7 +12,7 @@ export const getEmployees = async (req, res) => {
     const employees = await prisma.user.findMany({
       where: {
         companyId,
-        role: 'Site Engineer'
+        role: 'Site_Engineer'
       },
       select: {
         id: true,
