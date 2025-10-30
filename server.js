@@ -29,11 +29,57 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files for uploaded images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
+// Routes - ORDER MATTERS!
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/engineers', engineerRoutes);
-app.use('/api/users', userRoute);
+app.use('/api/users', userRoute);  // ✅ Keep it as /api/users
+
+// ✅ ADD THIS SINGLE employees ENDPOINT HERE (outside of routes)
+app.get('/api/employees', 
+  authenticateToken, 
+  async (req, res) => {
+    try {
+      const companyId = req.user.companyId;
+
+      console.log('==================');
+      console.log('Fetching engineers for companyId:', companyId);
+      console.log('==================');
+
+      // ✅ Fetch from Engineer table (not User table!)
+      const employees = await prisma.engineer.findMany({
+        where: {
+          companyId
+        },
+        select: {
+          id: true,
+          name: true,
+          empId: true,
+          phone: true,
+          alternatePhone: true
+        },
+        orderBy: {
+          name: 'asc'
+        }
+      });
+
+      console.log('Found engineers:', employees.length);
+      console.log('Engineers:', employees);
+
+      res.json({ 
+        count: employees.length,
+        employees 
+      });
+    } catch (error) {
+      console.error('Get employees error:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch employees',
+        details: error.message 
+      });
+    }
+  }
+);
+
 // Protected route - any authenticated user
 app.get('/api/profile', authenticateToken, (req, res) => {
   res.json({ user: req.user });
@@ -60,32 +106,6 @@ app.get('/api/admin/users',
       res.json({ users });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch users' });
-    }
-  }
-);
-
-// Get employees for assignment dropdown (Site Engineers only)
-app.get('/api/employees', 
-  authenticateToken, 
-  async (req, res) => {
-    try {
-      const employees = await prisma.user.findMany({
-        where: {
-          companyId: req.user.companyId,
-          role: 'Site_Engineer'
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true
-        },
-        orderBy: {
-          name: 'asc'
-        }
-      });
-      res.json({ employees });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch employees' });
     }
   }
 );

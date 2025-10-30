@@ -24,28 +24,32 @@ model User {
 }
 
 model Project {
-  id           Int                    @id @default(autoincrement())
-  name         String
-  description  String?
-  companyId    String
-  startDate    DateTime?
-  endDate      DateTime?
-  status       ProjectStatus          @default(ONGOING)
-  createdAt    DateTime               @default(now())
-  budget       Float?
-  clientName   String
-  projectId    String                 @unique
-  projectType  String
-  contracts    Contract[]
-  files        File[]
-  finances     FinancialTransaction[]
-  materialUsed MaterialUsage[]
-  company      Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  assignments  ProjectAssignment[]
+  id                 Int                    @id @default(autoincrement())
+  name               String
+  description        String?
+  companyId          String
+  startDate          DateTime?
+  endDate            DateTime?
+  status             ProjectStatus          @default(ONGOING)
+  createdAt          DateTime               @default(now())
+  budget             Float?
+  clientName         String
+  projectId          String                 @unique
+  projectType        String
+  location           String?                // Add this if not present
+  assignedEngineerId Int?                   // ✅ ADD THIS
+  contracts          Contract[]
+  files              File[]
+  finances           FinancialTransaction[]
+  materialUsed       MaterialUsage[]
+  company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignments        ProjectAssignment[]
+  assignedEngineer   Engineer?              @relation(fields: [assignedEngineerId], references: [id], onDelete: SetNull) // ✅ ADD THIS
 
   @@index([companyId])
   @@index([projectId])
   @@index([status])
+  @@index([assignedEngineerId])            // ✅ ADD THIS
 }
 
 model ProjectAssignment {
@@ -146,7 +150,7 @@ model Company {
 }
 
 model Engineer {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   name           String
   empId          String
   phone          String
@@ -154,9 +158,10 @@ model Engineer {
   address        String
   profileImage   String?
   companyId      String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projects       Project[] // ✅ ADD THIS
 
   @@unique([empId, companyId])
   @@index([companyId])

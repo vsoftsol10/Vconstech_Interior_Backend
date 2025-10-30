@@ -1,29 +1,38 @@
-// src/controllers/userController.js
 import { PrismaClient } from '../../generated/prisma/index.js';
 
 const prisma = new PrismaClient();
 
-// Get all site engineers in the same company
+// Get all engineers in the same company
 export const getEmployees = async (req, res) => {
+  
   try {
     const companyId = req.user.companyId;
 
-    // Fetch users with 'Site Engineer' role from the same company
-    const employees = await prisma.user.findMany({
+    console.log('==================');
+    console.log('Logged in user:', req.user); // ✅ See the full user object
+    console.log('Looking for companyId:', companyId); // ✅ See what companyId we're searching for
+    console.log('==================');
+
+    // ✅ Fetch from Engineer table
+    const employees = await prisma.engineer.findMany({
       where: {
-        companyId,
-        role: 'Site_Engineer'
+        companyId
       },
       select: {
         id: true,
         name: true,
-        email: true,
-        role: true
+        empId: true,
+        phone: true,
+        alternatePhone: true,
+        companyId: true  // ✅ Also return companyId to compare
       },
       orderBy: {
         name: 'asc'
       }
     });
+
+    console.log('Found engineers:', employees.length); // ✅ How many found
+    console.log('Engineers data:', employees); // ✅ See the full data
 
     res.json({
       count: employees.length,
@@ -39,7 +48,7 @@ export const getEmployees = async (req, res) => {
   }
 };
 
-// Get all users in the company (for Admin)
+// Keep your getAllUsers function as is...
 export const getAllUsers = async (req, res) => {
   try {
     const companyId = req.user.companyId;
