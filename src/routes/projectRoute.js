@@ -1,13 +1,16 @@
-// src/routes/projectRoute.js
 import express from 'express';
 import { 
   createProject, 
   getProjectById, 
   updateProject, 
   deleteProject,
-  getProjectsByCompany 
+  getProjectsByCompany,
+  uploadProjectFile,
+  getProjectFiles,
+  deleteProjectFile
 } from '../controllers/projectController.js';
 import { authenticateToken, authorizeRole } from '../middlewares/authMiddlewares.js';
+import { upload } from '../config/multerConfig.js';
 
 const router = express.Router();
 
@@ -28,5 +31,10 @@ router.put('/:id', authorizeRole('Admin'), updateProject);
 
 // Delete project (Admin only)
 router.delete('/:id', authorizeRole('Admin'), deleteProject);
+
+// File upload routes
+router.post('/:id/files', authorizeRole('Admin'), upload.single('file'), uploadProjectFile);
+router.get('/:id/files', getProjectFiles);
+router.delete('/:id/files/:fileId', authorizeRole('Admin'), deleteProjectFile);
 
 export default router;

@@ -9,6 +9,7 @@ import projectRoutes from './src/routes/projectRoute.js';
 import engineerRoutes from './src/routes/engineerRoute.js';
 import userRoute from './src/routes/userRoute.js';
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
+
 import { PrismaClient } from './generated/prisma/index.js';
 
 // ES module dirname workaround
