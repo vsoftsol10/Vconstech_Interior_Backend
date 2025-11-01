@@ -405,6 +405,10 @@ export const deleteProject = async (req, res) => {
 // Upload project file
 export const uploadProjectFile = async (req, res) => {
   try {
+      console.log('=== FILE UPLOAD DEBUG ===');
+    console.log('req.file:', req.file);  // ✅ Add this
+    console.log('req.body:', req.body);  // ✅ Add this
+    console.log('=======================');
     const { id } = req.params;
     const companyId = req.user.companyId;
     const userId = req.user.userId;
