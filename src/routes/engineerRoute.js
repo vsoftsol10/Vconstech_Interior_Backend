@@ -243,11 +243,47 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
   try {
     const { name, phone, alternatePhone, empId, address, username, password } = req.body;
 
-    // Validation
-    if (!name || !phone || !empId || !address) {
+    console.log('=== CREATE ENGINEER REQUEST ===');
+    console.log('Headers:', {
+      'content-type': req.headers['content-type'],
+      'authorization': req.headers.authorization ? 'Bearer ***' : 'MISSING'
+    });
+    console.log('Body fields:', Object.keys(req.body));
+    console.log('Body values:', {
+      name: name || 'MISSING',
+      phone: phone || 'MISSING',
+      alternatePhone: alternatePhone || 'empty',
+      empId: empId || 'MISSING',
+      address: address || 'MISSING',
+      username: username || 'MISSING',
+      password: password ? '***' : 'MISSING',
+      hasFile: !!req.file
+    });
+    console.log('================================');
+
+
+        const missingFields = [];
+    if (!name || !name.trim()) missingFields.push('name');
+    if (!phone || !phone.trim()) missingFields.push('phone');
+    if (!empId || !empId.trim()) missingFields.push('empId');
+    if (!address || !address.trim()) missingFields.push('address');
+    if (!username || !username.trim()) missingFields.push('username');
+    if (!password) missingFields.push('password');
+
+    if (missingFields.length > 0) {
+      console.log('Missing fields:', missingFields); // ✅ LOG MISSING FIELDS
       return res.status(400).json({ 
         success: false,
-        error: 'Name, phone, employee ID, and address are required' 
+        error: `Missing required fields: ${missingFields.join(', ')}`,
+        missingFields
+      });
+    }
+
+    // Validation
+   if (!name || !phone || !empId || !address || !username || !password) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Name, phone, employee ID, address, username, and password are required' 
       });
     }
 
@@ -285,34 +321,35 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
 
     // Validate username if provided
     if (username) {
-      if (username.length < 4) {
-        return res.status(400).json({ 
-          success: false,
-          error: 'Username must be at least 4 characters' 
-        });
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return res.status(400).json({ 
-          success: false,
-          error: 'Username can only contain letters, numbers, and underscores' 
-        });
-      }
-
-      // Check if username already exists in company
-      const existingUsername = await prisma.engineer.findFirst({
-        where: {
-          username: username,
-          companyId: req.user.companyId
-        }
+      // Validate username
+    if (username.length < 4) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Username must be at least 4 characters' 
       });
+    }
 
-      if (existingUsername) {
-        return res.status(400).json({ 
-          success: false,
-          error: 'Username already exists in your company' 
-        });
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Username can only contain letters, numbers, and underscores' 
+      });
+    }
+
+       // Check if username already exists in company
+    const existingUsername = await prisma.engineer.findFirst({
+      where: {
+        username: username,
+        companyId: req.user.companyId
       }
+    });
+
+    if (existingUsername) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Username already exists in your company' 
+      });
+    }
 
       // If username is provided, password must be provided
       if (!password) {
@@ -323,11 +360,12 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
       }
 
       if (password.length < 6) {
-        return res.status(400).json({ 
-          success: false,
-          error: 'Password must be at least 6 characters' 
-        });
-      }
+      return res.status(400).json({ 
+        success: false,
+        error: 'Password must be at least 6 characters' 
+      });
+    }
+    
     }
 
     // Hash password if provided
@@ -340,7 +378,7 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
     const profileImagePath = req.file ? `/uploads/engineers/${req.file.filename}` : null;
 
     // Create engineer
-    const engineer = await prisma.engineer.create({
+   const engineer = await prisma.engineer.create({
       data: {
         name,
         empId,
@@ -348,7 +386,7 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
         alternatePhone: alternatePhone || null,
         address,
         profileImage: profileImagePath,
-        username: username || null,
+        username: username,
         password: hashedPassword,
         companyId: req.user.companyId
       },
