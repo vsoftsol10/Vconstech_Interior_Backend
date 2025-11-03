@@ -36,20 +36,20 @@ model Project {
   clientName         String
   projectId          String                 @unique
   projectType        String
-  location           String?                // Add this if not present
-  assignedEngineerId Int?                   // ✅ ADD THIS
+  location           String?
+  assignedEngineerId Int?
   contracts          Contract[]
   files              File[]
   finances           FinancialTransaction[]
   materialUsed       MaterialUsage[]
   company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assignments        ProjectAssignment[]
-  assignedEngineer   Engineer?              @relation(fields: [assignedEngineerId], references: [id], onDelete: SetNull) // ✅ ADD THIS
+  assignedEngineer   Engineer?              @relation(fields: [assignedEngineerId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([projectId])
   @@index([status])
-  @@index([assignedEngineerId])            // ✅ ADD THIS
+  @@index([assignedEngineerId])
 }
 
 model ProjectAssignment {
@@ -157,14 +157,18 @@ model Engineer {
   alternatePhone String?
   address        String
   profileImage   String?
+  username       String?   // ✅ NEW: For login credentials
+  password       String?   // ✅ NEW: Hashed password
   companyId      String
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  projects       Project[] // ✅ ADD THIS
+  projects       Project[]
 
   @@unique([empId, companyId])
+  @@unique([username, companyId]) // ✅ NEW: Ensure username is unique per company
   @@index([companyId])
+  @@index([username])             // ✅ NEW: Index for faster login lookups
   @@map("engineers")
 }
 

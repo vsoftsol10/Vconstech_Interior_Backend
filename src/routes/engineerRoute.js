@@ -2,6 +2,8 @@
 import express from 'express';
 import { PrismaClient } from '../../generated/prisma/index.js';
 import { authenticateToken } from '../middlewares/authMiddlewares.js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -13,7 +15,6 @@ const prisma = new PrismaClient();
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = 'uploads/engineers';
-    // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -43,6 +44,105 @@ const upload = multer({
   }
 });
 
+// ============================================
+// ENGINEER LOGIN ENDPOINT (NEW)
+// ============================================
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Validation
+    if (!username || !password) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Username and password are required' 
+      });
+    }
+
+    // Find engineer by username
+    const engineer = await prisma.engineer.findFirst({
+      where: {
+        username: username
+      },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    if (!engineer) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Invalid username or password' 
+      });
+    }
+
+    // Check if engineer has credentials set
+    if (!engineer.password) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'No credentials set for this engineer. Please contact your administrator.' 
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, engineer.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Invalid username or password' 
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: engineer.id,
+        username: engineer.username,
+        name: engineer.name,
+        companyId: engineer.companyId,
+        role: 'Site_Engineer',
+        type: 'engineer'
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    // Return success response
+    res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      engineer: {
+        id: engineer.id,
+        name: engineer.name,
+        username: engineer.username,
+        empId: engineer.empId,
+        phone: engineer.phone,
+        profileImage: engineer.profileImage,
+        companyId: engineer.companyId,
+        companyName: engineer.company.name
+      }
+    });
+
+  } catch (error) {
+    console.error('Engineer login error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Login failed. Please try again.' 
+    });
+  }
+});
+
+// ============================================
+// ADMIN ROUTES (Protected)
+// ============================================
+
 // Get all engineers for the authenticated user's company
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -52,6 +152,24 @@ router.get('/', authenticateToken, async (req, res) => {
       },
       orderBy: {
         createdAt: 'desc'
+      },
+      select: {
+        id: true,
+        name: true,
+        empId: true,
+        phone: true,
+        alternatePhone: true,
+        address: true,
+        profileImage: true,
+        username: true,
+        // Don't send password hash to frontend
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            projects: true
+          }
+        }
       }
     });
 
@@ -77,6 +195,26 @@ router.get('/:id', authenticateToken, async (req, res) => {
       where: {
         id: parseInt(id),
         companyId: req.user.companyId
+      },
+      select: {
+        id: true,
+        name: true,
+        empId: true,
+        phone: true,
+        alternatePhone: true,
+        address: true,
+        profileImage: true,
+        username: true,
+        createdAt: true,
+        updatedAt: true,
+        projects: {
+          select: {
+            id: true,
+            name: true,
+            projectId: true,
+            status: true
+          }
+        }
       }
     });
 
@@ -103,7 +241,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create new engineer
 router.post('/', authenticateToken, upload.single('profileImage'), async (req, res) => {
   try {
-    const { name, phone, alternatePhone, empId, address } = req.body;
+    const { name, phone, alternatePhone, empId, address, username, password } = req.body;
 
     // Validation
     if (!name || !phone || !empId || !address) {
@@ -145,6 +283,59 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
       });
     }
 
+    // Validate username if provided
+    if (username) {
+      if (username.length < 4) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Username must be at least 4 characters' 
+        });
+      }
+
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Username can only contain letters, numbers, and underscores' 
+        });
+      }
+
+      // Check if username already exists in company
+      const existingUsername = await prisma.engineer.findFirst({
+        where: {
+          username: username,
+          companyId: req.user.companyId
+        }
+      });
+
+      if (existingUsername) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Username already exists in your company' 
+        });
+      }
+
+      // If username is provided, password must be provided
+      if (!password) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Password is required when username is provided' 
+        });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Password must be at least 6 characters' 
+        });
+      }
+    }
+
+    // Hash password if provided
+    let hashedPassword = null;
+    if (password && username) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
     // Get profile image path if uploaded
     const profileImagePath = req.file ? `/uploads/engineers/${req.file.filename}` : null;
 
@@ -157,7 +348,21 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
         alternatePhone: alternatePhone || null,
         address,
         profileImage: profileImagePath,
+        username: username || null,
+        password: hashedPassword,
         companyId: req.user.companyId
+      },
+      select: {
+        id: true,
+        name: true,
+        empId: true,
+        phone: true,
+        alternatePhone: true,
+        address: true,
+        profileImage: true,
+        username: true,
+        createdAt: true,
+        updatedAt: true
       }
     });
 
@@ -187,7 +392,7 @@ router.post('/', authenticateToken, upload.single('profileImage'), async (req, r
 router.put('/:id', authenticateToken, upload.single('profileImage'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, phone, alternatePhone, empId, address } = req.body;
+    const { name, phone, alternatePhone, empId, address, username, password } = req.body;
 
     // Check if engineer exists and belongs to user's company
     const existingEngineer = await prisma.engineer.findFirst({
@@ -247,6 +452,53 @@ router.put('/:id', authenticateToken, upload.single('profileImage'), async (req,
       });
     }
 
+    // Validate username if provided
+    if (username) {
+      if (username.length < 4) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Username must be at least 4 characters' 
+        });
+      }
+
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Username can only contain letters, numbers, and underscores' 
+        });
+      }
+
+      // Check if username already exists (excluding current engineer)
+      const duplicateUsername = await prisma.engineer.findFirst({
+        where: {
+          username: username,
+          companyId: req.user.companyId,
+          NOT: {
+            id: parseInt(id)
+          }
+        }
+      });
+
+      if (duplicateUsername) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Username already exists in your company' 
+        });
+      }
+    }
+
+    // Hash password if new password provided
+    let hashedPassword = existingEngineer.password; // Keep existing password
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Password must be at least 6 characters' 
+        });
+      }
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
     // Get profile image path if uploaded
     let profileImagePath = existingEngineer.profileImage;
     if (req.file) {
@@ -269,7 +521,21 @@ router.put('/:id', authenticateToken, upload.single('profileImage'), async (req,
         phone,
         alternatePhone: alternatePhone || null,
         address,
-        profileImage: profileImagePath
+        profileImage: profileImagePath,
+        username: username || null,
+        password: hashedPassword
+      },
+      select: {
+        id: true,
+        name: true,
+        empId: true,
+        phone: true,
+        alternatePhone: true,
+        address: true,
+        profileImage: true,
+        username: true,
+        createdAt: true,
+        updatedAt: true
       }
     });
 
