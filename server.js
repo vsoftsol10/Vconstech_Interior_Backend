@@ -140,6 +140,157 @@ app.use((err, req, res, next) => {
   });
 });
 
+app.get('/api/debug/projects', 
+  authenticateToken, 
+  async (req, res) => {
+    try {
+      const companyId = req.user.companyId;
+
+      console.log('=== DEBUG: Fetching ALL projects ===');
+      console.log('Company ID:', companyId);
+
+      // Fetch ALL projects without any filtering
+      const allProjects = await prisma.project.findMany({
+        where: {
+          companyId
+        },
+        include: {
+          assignedEngineer: {
+            select: {
+              id: true,
+              name: true,
+              empId: true,
+            }
+          },
+          _count: {
+            select: {
+              materialUsed: true,
+              contracts: true,
+              finances: true,
+              files: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      console.log('Total projects found:', allProjects.length);
+      console.log('Projects:', JSON.stringify(allProjects, null, 2));
+
+      // Also check if there are any deleted projects (if you have soft delete)
+      const projectsCount = await prisma.project.count({
+        where: { companyId }
+      });
+
+      console.log('Project count:', projectsCount);
+
+      res.json({
+        count: allProjects.length,
+        totalInDatabase: projectsCount,
+        projects: allProjects,
+        companyId
+      });
+
+    } catch (error) {
+      console.error('Debug error:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch debug info',
+        details: error.message 
+      });
+    }
+  }
+);
+// Add this debug endpoint to your server.js temporarily
+// Place it AFTER your other routes but BEFORE error handling
+
+app.get('/api/debug/projects', 
+  authenticateToken, 
+  async (req, res) => {
+    try {
+      const companyId = req.user.companyId;
+
+      console.log('=== DEBUG: Fetching ALL projects ===');
+      console.log('Company ID:', companyId);
+
+      // Fetch ALL projects without any filtering
+      const allProjects = await prisma.project.findMany({
+        where: {
+          companyId
+        },
+        include: {
+          assignedEngineer: {
+            select: {
+              id: true,
+              name: true,
+              empId: true,
+            }
+          },
+          _count: {
+            select: {
+              materialUsed: true,
+              contracts: true,
+              finances: true,
+              files: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      console.log('Total projects found:', allProjects.length);
+      console.log('Projects:', JSON.stringify(allProjects, null, 2));
+
+      // Also check if there are any deleted projects (if you have soft delete)
+      const projectsCount = await prisma.project.count({
+        where: { companyId }
+      });
+
+      console.log('Project count:', projectsCount);
+
+      res.json({
+        count: allProjects.length,
+        totalInDatabase: projectsCount,
+        projects: allProjects,
+        companyId
+      });
+
+    } catch (error) {
+      console.error('Debug error:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch debug info',
+        details: error.message 
+      });
+    }
+  }
+);
+app.post('/api/test/project', authenticateToken, async (req, res) => {
+  try {
+    console.log('🧪 TEST: Creating test project');
+    const project = await prisma.project.create({
+      data: {
+        projectId: 'TEST-' + Date.now(),
+        name: 'Test Project',
+        clientName: 'Test Client',
+        projectType: 'Residential',
+        status: 'PENDING',
+        companyId: req.user.companyId,
+        location: 'Test Location',
+        assignedEngineerId: parseInt(req.body.engineerId)
+      }
+    });
+    
+    console.log('✅ Test project created:', project.id);
+    res.json({ success: true, project });
+  } catch (error) {
+    console.error('❌ Test project failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
   await prisma.$disconnect();

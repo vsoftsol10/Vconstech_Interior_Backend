@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create a new project
 export const createProject = async (req, res) => {
   try {
     const {
@@ -24,39 +23,49 @@ export const createProject = async (req, res) => {
       assignedUserId
     } = req.body;
 
-    console.log('Creating project with data:', req.body);
+    console.log('========================================');
+    console.log('📥 CREATE PROJECT REQUEST');
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('User:', req.user);
+    console.log('========================================');
 
     // Validation
     if (!projectId || !name || !clientName) {
+      console.log('❌ Validation failed: Missing required fields');
       return res.status(400).json({ 
         error: 'Project ID, name, and client name are required' 
       });
     }
 
     if (!location) {
+      console.log('❌ Validation failed: Missing location');
       return res.status(400).json({ 
         error: 'Project location is required' 
       });
     }
 
     if (!assignedUserId) {
+      console.log('❌ Validation failed: Missing engineer assignment');
       return res.status(400).json({ 
         error: 'Engineer assignment is required' 
       });
     }
 
     // Check if project ID already exists
+    console.log('🔍 Checking for duplicate project ID:', projectId);
     const existingProject = await prisma.project.findUnique({
       where: { projectId }
     });
 
     if (existingProject) {
+      console.log('❌ Duplicate project ID found:', existingProject.id);
       return res.status(400).json({ 
         error: 'Project ID already exists' 
       });
     }
 
     // Verify assigned engineer exists and belongs to same company
+    console.log('🔍 Verifying engineer:', assignedUserId);
     const assignedEngineer = await prisma.engineer.findFirst({
       where: {
         id: parseInt(assignedUserId),
@@ -65,6 +74,7 @@ export const createProject = async (req, res) => {
     });
 
     if (!assignedEngineer) {
+      console.log('❌ Engineer not found or wrong company');
       return res.status(400).json({ 
         error: 'Invalid Engineer selected or engineer does not belong to your company' 
       });
@@ -72,6 +82,7 @@ export const createProject = async (req, res) => {
 
     // Get company ID from authenticated user
     const companyId = req.user.companyId;
+    console.log('✅ All validations passed. Creating project...');
 
     // Create project with engineer assignment
     const project = await prisma.project.create({
@@ -102,7 +113,10 @@ export const createProject = async (req, res) => {
       }
     });
 
-    console.log('Project created successfully:', project);
+    console.log('✅✅✅ PROJECT CREATED SUCCESSFULLY ✅✅✅');
+    console.log('Project DB ID:', project.id);
+    console.log('Project ID:', project.projectId);
+    console.log('========================================');
 
     res.status(201).json({
       message: 'Project created successfully',
@@ -110,19 +124,27 @@ export const createProject = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create project error:', error);
+    console.error('💥💥💥 CREATE PROJECT ERROR 💥💥💥');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
+    console.error('========================================');
+    
     res.status(500).json({ 
       error: 'Failed to create project',
       details: error.message 
     });
   }
 };
+// Replace your getProjectsByCompany function with this fixed version
 
-// Get all projects for user's company
 export const getProjectsByCompany = async (req, res) => {
   try {
     const companyId = req.user.companyId;
     const { status, projectType } = req.query;
+
+    console.log('=== Get Projects By Company ===');
+    console.log('Company ID:', companyId);
+    console.log('Filters - Status:', status, 'Type:', projectType);
 
     const whereClause = { companyId };
     
@@ -133,6 +155,8 @@ export const getProjectsByCompany = async (req, res) => {
     if (projectType) {
       whereClause.projectType = projectType;
     }
+
+    console.log('Where clause:', JSON.stringify(whereClause, null, 2));
 
     const projects = await prisma.project.findMany({
       where: whereClause,
@@ -159,6 +183,9 @@ export const getProjectsByCompany = async (req, res) => {
         createdAt: 'desc'
       }
     });
+
+    console.log('Projects found:', projects.length);
+    console.log('Project IDs:', projects.map(p => ({ id: p.id, projectId: p.projectId, name: p.name })));
 
     res.json({
       count: projects.length,
@@ -474,6 +501,9 @@ export const uploadProjectFile = async (req, res) => {
     });
   }
 };
+
+
+
 
 // Get all files for a project
 export const getProjectFiles = async (req, res) => {

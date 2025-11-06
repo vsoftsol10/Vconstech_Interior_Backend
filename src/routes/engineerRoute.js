@@ -51,6 +51,8 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    console.log('🔐 Engineer login attempt:', { username });
+
     // Validation
     if (!username || !password) {
       return res.status(400).json({ 
@@ -74,6 +76,8 @@ router.post('/login', async (req, res) => {
       }
     });
 
+    console.log('📋 Engineer found:', engineer ? 'Yes' : 'No');
+
     if (!engineer) {
       return res.status(401).json({ 
         success: false,
@@ -89,8 +93,12 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    console.log('🔒 Password hash exists:', !!engineer.password);
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, engineer.password);
+
+    console.log('🔑 Password valid:', isPasswordValid);
 
     if (!isPasswordValid) {
       return res.status(401).json({ 
@@ -99,7 +107,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Generate JWT token
+    // Generate JWT token with type: 'engineer'
     const token = jwt.sign(
       { 
         id: engineer.id,
@@ -107,11 +115,13 @@ router.post('/login', async (req, res) => {
         name: engineer.name,
         companyId: engineer.companyId,
         role: 'Site_Engineer',
-        type: 'engineer'
+        type: 'engineer'  // ✅ CRITICAL: This tells middleware it's an engineer
       },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '7d' }
     );
+
+    console.log('✅ Token generated for engineer:', engineer.name);
 
     // Return success response
     res.json({
@@ -131,7 +141,7 @@ router.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Engineer login error:', error);
+    console.error('❌ Engineer login error:', error);
     res.status(500).json({ 
       success: false,
       error: 'Login failed. Please try again.' 
