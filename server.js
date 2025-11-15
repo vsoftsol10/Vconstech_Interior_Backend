@@ -8,8 +8,15 @@ import authRoutes from './src/routes/authRoute.js';
 import projectRoutes from './src/routes/projectRoute.js';
 import engineerRoutes from './src/routes/engineerRoute.js';
 import userRoute from './src/routes/userRoute.js';
-import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 
+// ✅ NEW: Material Management Routes
+import materialRoutes from './src/routes/materialRoutes.js';
+import projectMaterialRoutes from './src/routes/projectMaterialRoutes.js';
+import materialRequestRoutes from './src/routes/materialRequestRoutes.js';
+import usageLogRoutes from './src/routes/usageLogRoutes.js';
+import notificationRoutes from './src/routes/notificationRoutes.js';
+
+import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { PrismaClient } from './generated/prisma/index.js';
 
 // ES module dirname workaround
@@ -30,28 +37,27 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files for uploaded images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes - ORDER MATTERS!
+// ========== EXISTING ROUTES ==========
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/engineers', engineerRoutes);
-app.use('/api/users', userRoute);  // ✅ Keep it as /api/users
+app.use('/api/users', userRoute);
 
-// ✅ ADD THIS SINGLE employees ENDPOINT HERE (outside of routes)
+// ========== NEW: MATERIAL MANAGEMENT ROUTES ==========
+app.use('/api/materials', materialRoutes);
+app.use('/api/project-materials', projectMaterialRoutes);
+app.use('/api/material-requests', materialRequestRoutes);
+app.use('/api/usage-logs', usageLogRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// ========== EXISTING ENDPOINTS ==========
 app.get('/api/employees', 
   authenticateToken, 
   async (req, res) => {
     try {
       const companyId = req.user.companyId;
-
-      console.log('==================');
-      console.log('Fetching engineers for companyId:', companyId);
-      console.log('==================');
-
-      // ✅ Fetch from Engineer table (not User table!)
       const employees = await prisma.engineer.findMany({
-        where: {
-          companyId
-        },
+        where: { companyId },
         select: {
           id: true,
           name: true,
@@ -59,18 +65,9 @@ app.get('/api/employees',
           phone: true,
           alternatePhone: true
         },
-        orderBy: {
-          name: 'asc'
-        }
+        orderBy: { name: 'asc' }
       });
-
-      console.log('Found engineers:', employees.length);
-      console.log('Engineers:', employees);
-
-      res.json({ 
-        count: employees.length,
-        employees 
-      });
+      res.json({ count: employees.length, employees });
     } catch (error) {
       console.error('Get employees error:', error);
       res.status(500).json({ 
@@ -81,21 +78,17 @@ app.get('/api/employees',
   }
 );
 
-// Protected route - any authenticated user
 app.get('/api/profile', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
 
-// Admin-only route - get all users in company
 app.get('/api/admin/users', 
   authenticateToken, 
   authorizeRole('Admin'), 
   async (req, res) => {
     try {
       const users = await prisma.user.findMany({
-        where: {
-          companyId: req.user.companyId
-        },
+        where: { companyId: req.user.companyId },
         select: {
           id: true,
           name: true,
@@ -120,7 +113,6 @@ app.get('/health', (req, res) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   
-  // Handle multer errors
   if (err.name === 'MulterError') {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ 
@@ -140,157 +132,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.get('/api/debug/projects', 
-  authenticateToken, 
-  async (req, res) => {
-    try {
-      const companyId = req.user.companyId;
-
-      console.log('=== DEBUG: Fetching ALL projects ===');
-      console.log('Company ID:', companyId);
-
-      // Fetch ALL projects without any filtering
-      const allProjects = await prisma.project.findMany({
-        where: {
-          companyId
-        },
-        include: {
-          assignedEngineer: {
-            select: {
-              id: true,
-              name: true,
-              empId: true,
-            }
-          },
-          _count: {
-            select: {
-              materialUsed: true,
-              contracts: true,
-              finances: true,
-              files: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
-
-      console.log('Total projects found:', allProjects.length);
-      console.log('Projects:', JSON.stringify(allProjects, null, 2));
-
-      // Also check if there are any deleted projects (if you have soft delete)
-      const projectsCount = await prisma.project.count({
-        where: { companyId }
-      });
-
-      console.log('Project count:', projectsCount);
-
-      res.json({
-        count: allProjects.length,
-        totalInDatabase: projectsCount,
-        projects: allProjects,
-        companyId
-      });
-
-    } catch (error) {
-      console.error('Debug error:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch debug info',
-        details: error.message 
-      });
-    }
-  }
-);
-// Add this debug endpoint to your server.js temporarily
-// Place it AFTER your other routes but BEFORE error handling
-
-app.get('/api/debug/projects', 
-  authenticateToken, 
-  async (req, res) => {
-    try {
-      const companyId = req.user.companyId;
-
-      console.log('=== DEBUG: Fetching ALL projects ===');
-      console.log('Company ID:', companyId);
-
-      // Fetch ALL projects without any filtering
-      const allProjects = await prisma.project.findMany({
-        where: {
-          companyId
-        },
-        include: {
-          assignedEngineer: {
-            select: {
-              id: true,
-              name: true,
-              empId: true,
-            }
-          },
-          _count: {
-            select: {
-              materialUsed: true,
-              contracts: true,
-              finances: true,
-              files: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
-
-      console.log('Total projects found:', allProjects.length);
-      console.log('Projects:', JSON.stringify(allProjects, null, 2));
-
-      // Also check if there are any deleted projects (if you have soft delete)
-      const projectsCount = await prisma.project.count({
-        where: { companyId }
-      });
-
-      console.log('Project count:', projectsCount);
-
-      res.json({
-        count: allProjects.length,
-        totalInDatabase: projectsCount,
-        projects: allProjects,
-        companyId
-      });
-
-    } catch (error) {
-      console.error('Debug error:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch debug info',
-        details: error.message 
-      });
-    }
-  }
-);
-app.post('/api/test/project', authenticateToken, async (req, res) => {
-  try {
-    console.log('🧪 TEST: Creating test project');
-    const project = await prisma.project.create({
-      data: {
-        projectId: 'TEST-' + Date.now(),
-        name: 'Test Project',
-        clientName: 'Test Client',
-        projectType: 'Residential',
-        status: 'PENDING',
-        companyId: req.user.companyId,
-        location: 'Test Location',
-        assignedEngineerId: parseInt(req.body.engineerId)
-      }
-    });
-    
-    console.log('✅ Test project created:', project.id);
-    res.json({ success: true, project });
-  } catch (error) {
-    console.error('❌ Test project failed:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Graceful shutdown
 process.on('SIGINT', async () => {
   await prisma.$disconnect();
@@ -298,7 +139,8 @@ process.on('SIGINT', async () => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📊 API available at http://localhost:${PORT}/api`);
 });
 
 export default app;

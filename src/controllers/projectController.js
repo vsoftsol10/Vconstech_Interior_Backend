@@ -172,7 +172,7 @@ export const getProjectsByCompany = async (req, res) => {
         },
         _count: {
           select: {
-            materialUsed: true,
+            materialUsages: true,
             contracts: true,
             finances: true,
             files: true
