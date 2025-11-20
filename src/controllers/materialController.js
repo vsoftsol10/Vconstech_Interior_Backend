@@ -274,6 +274,7 @@ export const deleteMaterial = async (req, res) => {
  * Get material categories
  * GET /api/materials/categories
  */
+// In materialController.js - Update getCategories function
 export const getCategories = async (req, res) => {
   try {
     const { companyId } = req.user;
@@ -284,7 +285,8 @@ export const getCategories = async (req, res) => {
       distinct: ['category']
     });
 
-    const categories = ['All', ...materials.map(m => m.category).filter(Boolean)];
+    // ✅ Don't include 'All' - let frontend handle it
+    const categories = materials.map(m => m.category).filter(Boolean);
 
     res.json({ 
       success: true,

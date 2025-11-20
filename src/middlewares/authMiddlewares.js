@@ -25,9 +25,21 @@ export const authorizeRole = (...roles) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!roles.includes(req.user.role)) {
+    if (!req.user.role) {
       return res.status(403).json({ 
-        error: 'You do not have permission to perform this action' 
+        error: 'No role found in token' 
+      });
+    }
+
+    // ✅ Case-insensitive comparison
+    const userRole = req.user.role.toUpperCase();
+    const allowedRoles = roles.map(role => role.toUpperCase());
+
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ 
+        error: 'You do not have permission to perform this action',
+        requiredRole: roles,
+        yourRole: req.user.role
       });
     }
 

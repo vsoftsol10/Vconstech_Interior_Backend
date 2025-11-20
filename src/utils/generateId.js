@@ -69,16 +69,16 @@ export const determineProjectMaterialStatus = (assigned, used) => {
 
 /**
  * Create notification for user
- * ✅ FIXED: Handle both string and int user IDs
+ * ✅ FIXED: Uses engineerId (Int) instead of userId
  */
 export const createNotification = async (userId, message, type = 'INFO') => {
   try {
-    // Ensure userId is a string
-    const userIdString = String(userId);
+    // Ensure userId is an integer
+    const engineerId = parseInt(userId);
     
     const notification = await prisma.notification.create({
       data: {
-        userId: userIdString, // ✅ Use string
+        engineerId, // ✅ Use engineerId as Int
         message,
         type,
         read: false,

@@ -20,8 +20,9 @@ model User {
   uploadedFiles      File[]
   materialUsages     MaterialUsage[]
   projectAssignments ProjectAssignment[]
-  materialRequests   MaterialRequest[]   // ✅ NEW
-  notifications      Notification[]      // ✅ NEW
+  // ✅ REMOVED - These are now in Engineer model
+  // materialRequests   MaterialRequest[]
+  // notifications      Notification[]
   company            Company?            @relation(fields: [companyId], references: [id])
 }
 
@@ -44,8 +45,8 @@ model Project {
   files              File[]
   finances           FinancialTransaction[]
   materialUsages     MaterialUsage[]
-  projectMaterials   ProjectMaterial[]      // ✅ NEW: Materials assigned to project
-  materialRequests   MaterialRequest[]      // ✅ NEW: Requests for this project
+  projectMaterials   ProjectMaterial[]
+  materialRequests   MaterialRequest[]
   company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assignments        ProjectAssignment[]
   assignedEngineer   Engineer?              @relation(fields: [assignedEngineerId], references: [id], onDelete: SetNull)
@@ -69,42 +70,40 @@ model ProjectAssignment {
   @@index([userId])
 }
 
-// ✅ ENHANCED Material Model
 model Material {
   id               Int               @id @default(autoincrement())
-  materialId       String            @unique           // MAT001, MAT002, etc.
+  materialId       String            @unique
   name             String
-  category         String                              // Paint, Wood, Flooring, etc.
-  type             String?                             // Keep for backward compatibility
-  unit             String                              // liter, sheet, sq.ft, piece
-  defaultRate      Float?                              // Price per unit
-  vendor           String?                             // Supplier name
-  description      String?                             // Additional details
+  category         String
+  type             String?
+  unit             String
+  defaultRate      Float?
+  vendor           String?
+  description      String?
   companyId        String
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   usages           MaterialUsage[]
-  projectMaterials ProjectMaterial[]                   // ✅ NEW
-  requests         MaterialRequest[]                   // ✅ NEW
+  projectMaterials ProjectMaterial[]
+  requests         MaterialRequest[]
 
   @@index([companyId])
   @@index([materialId])
   @@index([category])
 }
 
-// ✅ NEW: Links materials to projects with quantities
 model ProjectMaterial {
-  id         Int      @id @default(autoincrement())
+  id         Int                   @id @default(autoincrement())
   projectId  Int
   materialId Int
-  assigned   Float                                     // Total quantity assigned
-  used       Float    @default(0)                      // Quantity used
-  status     ProjectMaterialStatus @default(ACTIVE)   // Active, Completed, Not Used
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  assigned   Float
+  used       Float                 @default(0)
+  status     ProjectMaterialStatus @default(ACTIVE)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  project    Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  material   Material              @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, materialId])
   @@index([projectId])
@@ -112,14 +111,13 @@ model ProjectMaterial {
   @@index([status])
 }
 
-// ✅ ENHANCED MaterialUsage with remarks
 model MaterialUsage {
   id         Int      @id @default(autoincrement())
   materialId Int
   projectId  Int
   userId     String
   quantity   Float
-  remarks    String?                                   // ✅ NEW: Usage notes
+  remarks    String?
   date       DateTime @default(now())
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -131,32 +129,33 @@ model MaterialUsage {
   @@index([date])
 }
 
-// ✅ NEW: Material Request System
+// ✅ FIXED: Now uses Engineer (Int) instead of User (String UUID)
 model MaterialRequest {
-  id              Int                  @id @default(autoincrement())
-  requestId       String               @unique          // REQ001, REQ002, etc.
-  employeeId      String
-  name            String                                // Material name
+  id              Int                 @id @default(autoincrement())
+  requestId       String              @unique
+  employeeId      Int
+  name            String
   category        String
   unit            String
   defaultRate     Float
   vendor          String?
   description     String?
-  type            MaterialRequestType                   // global, project, project-material
-  projectId       Int?                                  // For project-specific
-  materialId      Int?                                  // For adding existing material
-  quantity        Float?                                // For project-specific
-  status          RequestStatus        @default(PENDING)
-  requestDate     DateTime             @default(now())
+  type            MaterialRequestType
+  projectId       Int?
+  materialId      Int?
+  quantity        Float?
+  status          RequestStatus       @default(PENDING)
+  requestDate     DateTime            @default(now())
   reviewDate      DateTime?
   approvalNotes   String?
   rejectionReason String?
-  reviewedBy      String?                               // Supervisor ID
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  employee        User                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  project         Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  material        Material?            @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  reviewedBy      Int?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  employee        Engineer            @relation("EmployeeRequests", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewer        Engineer?           @relation("ReviewedRequests", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  project         Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  material        Material?           @relation(fields: [materialId], references: [id], onDelete: SetNull)
 
   @@index([employeeId])
   @@index([status])
@@ -165,17 +164,17 @@ model MaterialRequest {
   @@index([requestDate])
 }
 
-// ✅ NEW: Notification System
+// ✅ FIXED: Now uses Engineer (Int) instead of User (String UUID)
 model Notification {
-  id        Int              @id @default(autoincrement())
-  userId    String
-  message   String
-  type      NotificationType                           // success, error, info
-  read      Boolean          @default(false)
-  date      DateTime         @default(now())
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         Int              @id @default(autoincrement())
+  engineerId Int
+  message    String
+  type       NotificationType
+  read       Boolean          @default(false)
+  date       DateTime         @default(now())
+  engineer   Engineer         @relation(fields: [engineerId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([engineerId])
   @@index([read])
   @@index([date])
 }
@@ -234,21 +233,25 @@ model Company {
   @@map("companies")
 }
 
+// ✅ ENHANCED: Added material requests and notifications
 model Engineer {
-  id             Int       @id @default(autoincrement())
-  name           String
-  empId          String
-  phone          String
-  alternatePhone String?
-  address        String
-  profileImage   String?
-  username       String?
-  password       String?
-  companyId      String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  projects       Project[]
+  id               Int               @id @default(autoincrement())
+  name             String
+  empId            String
+  phone            String
+  alternatePhone   String?
+  address          String
+  profileImage     String?
+  username         String?
+  password         String?
+  companyId        String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projects         Project[]
+  materialRequests MaterialRequest[] @relation("EmployeeRequests")
+  reviewedRequests MaterialRequest[] @relation("ReviewedRequests")
+  notifications    Notification[]
 
   @@unique([empId, companyId])
   @@unique([username, companyId])
@@ -257,7 +260,6 @@ model Engineer {
   @@map("engineers")
 }
 
-// ✅ NEW Enums
 enum ProjectMaterialStatus {
   ACTIVE
   COMPLETED
@@ -265,9 +267,9 @@ enum ProjectMaterialStatus {
 }
 
 enum MaterialRequestType {
-  GLOBAL           // New material for all projects
-  PROJECT          // New project-specific material
-  PROJECT_MATERIAL // Add existing material to project
+  GLOBAL
+  PROJECT
+  PROJECT_MATERIAL
 }
 
 enum RequestStatus {

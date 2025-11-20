@@ -2,10 +2,6 @@ import { PrismaClient } from '../../generated/prisma/index.js';
 
 const prisma = new PrismaClient();
 
-/**
- * Get all notifications for user
- * GET /api/notifications
- */
 export const getNotifications = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?.userId;
@@ -19,8 +15,8 @@ export const getNotifications = async (req, res) => {
 
     const { unreadOnly } = req.query;
 
-    // ✅ FIX: Keep as string, don't convert to Int
-    const where = { userId: String(userId) };
+    // ✅ FIX: Use engineerId and convert to Int
+    const where = { engineerId: parseInt(userId) };
 
     if (unreadOnly === 'true') {
       where.read = false;
@@ -37,7 +33,7 @@ export const getNotifications = async (req, res) => {
 
     const unreadCount = await prisma.notification.count({
       where: {
-        userId: String(userId),
+        engineerId: parseInt(userId),
         read: false
       }
     }).catch(err => {
@@ -73,11 +69,8 @@ export const markAsRead = async (req, res) => {
       });
     }
 
-    // ✅ Check if ID is numeric or string
-    const notificationId = isNaN(id) ? id : parseInt(id);
-
     const notification = await prisma.notification.findUnique({
-      where: { id: notificationId }
+      where: { id: parseInt(id) }
     });
 
     if (!notification) {
@@ -87,7 +80,8 @@ export const markAsRead = async (req, res) => {
       });
     }
 
-    if (notification.userId !== String(userId)) {
+    // ✅ FIX: Use engineerId
+    if (notification.engineerId !== parseInt(userId)) {
       return res.status(403).json({ 
         success: false,
         error: 'Unauthorized' 
@@ -95,7 +89,7 @@ export const markAsRead = async (req, res) => {
     }
 
     const updated = await prisma.notification.update({
-      where: { id: notificationId },
+      where: { id: parseInt(id) },
       data: { read: true }
     });
 
@@ -127,7 +121,7 @@ export const markAllAsRead = async (req, res) => {
 
     const result = await prisma.notification.updateMany({
       where: {
-        userId: String(userId),
+        engineerId: parseInt(userId),
         read: false
       },
       data: { read: true }
@@ -160,10 +154,8 @@ export const deleteNotification = async (req, res) => {
       });
     }
 
-    const notificationId = isNaN(id) ? id : parseInt(id);
-
     const notification = await prisma.notification.findUnique({
-      where: { id: notificationId }
+      where: { id: parseInt(id) }
     });
 
     if (!notification) {
@@ -173,7 +165,7 @@ export const deleteNotification = async (req, res) => {
       });
     }
 
-    if (notification.userId !== String(userId)) {
+    if (notification.engineerId !== parseInt(userId)) {
       return res.status(403).json({ 
         success: false,
         error: 'Unauthorized' 
@@ -181,7 +173,7 @@ export const deleteNotification = async (req, res) => {
     }
 
     await prisma.notification.delete({
-      where: { id: notificationId }
+      where: { id: parseInt(id) }
     });
 
     res.json({ 
@@ -211,7 +203,7 @@ export const clearReadNotifications = async (req, res) => {
 
     const result = await prisma.notification.deleteMany({
       where: {
-        userId: String(userId),
+        engineerId: parseInt(userId),
         read: true
       }
     });

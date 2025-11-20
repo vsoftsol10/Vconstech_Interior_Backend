@@ -1,5 +1,6 @@
 import express from 'express';
 import { 
+  getAllRequests,        // ✅ ADD THIS IMPORT
   getMyRequests,
   getPendingRequests,
   createMaterialRequest,
@@ -13,11 +14,15 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticateToken);
 
+// ✅ IMPORTANT: Put specific routes BEFORE general routes
 // GET /api/material-requests/my-requests (Employee)
 router.get('/my-requests', getMyRequests);
 
 // GET /api/material-requests/pending (Admin only)
 router.get('/pending', authorizeRole('Admin'), getPendingRequests);
+
+// ✅ ADD THIS: GET /api/material-requests (Admin only - Get ALL requests)
+router.get('/', authorizeRole('Admin'), getAllRequests);
 
 // POST /api/material-requests (Employee)
 router.post('/', createMaterialRequest);

@@ -10,16 +10,15 @@ export const getMyRequests = async (req, res) => {
     if (!userId) {
       return res.status(400).json({ 
         success: false,
-        error: 'User ID not found in request',
-        debug: { user: req.user }
+        error: 'User ID not found in request'
       });
     }
 
     console.log('Fetching requests for user ID:', userId);
 
-    // ✅ FIX: Keep as string, don't convert to Int
+    // ✅ FIX: employeeId is Int, not String
     const requests = await prisma.materialRequest.findMany({
-      where: { employeeId: String(userId) },
+      where: { employeeId: parseInt(userId) },
       include: {
         project: {
           select: {
@@ -133,6 +132,9 @@ export const createMaterialRequest = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?.userId;
     
+    console.log('📝 Creating request with data:', req.body);
+    console.log('👤 User ID:', userId);
+    
     if (!userId) {
       return res.status(400).json({ 
         success: false,
@@ -175,14 +177,10 @@ export const createMaterialRequest = async (req, res) => {
 
     const requestId = await generateRequestId();
 
-    // ✅ Determine if projectId/materialId should be Int or String
-    const projectIdValue = projectId ? (isNaN(projectId) ? projectId : parseInt(projectId)) : null;
-    const materialIdValue = materialId ? (isNaN(materialId) ? materialId : parseInt(materialId)) : null;
-
     const request = await prisma.materialRequest.create({
       data: {
         requestId,
-        employeeId: String(userId), // ✅ Keep as string
+        employeeId: parseInt(userId), // ✅ FIX: Convert to Int
         name,
         category,
         unit,
@@ -190,8 +188,8 @@ export const createMaterialRequest = async (req, res) => {
         vendor: vendor || null,
         description: description || null,
         type,
-        projectId: projectIdValue,
-        materialId: materialIdValue,
+        projectId: projectId ? parseInt(projectId) : null,
+        materialId: materialId ? parseInt(materialId) : null,
         quantity: quantity ? parseFloat(quantity) : null,
         status: 'PENDING',
         requestDate: new Date()
@@ -205,8 +203,11 @@ export const createMaterialRequest = async (req, res) => {
       }
     });
 
+    console.log('✅ Request created successfully:', request.id);
+
+    // Create notification
     await createNotification(
-      String(userId), // ✅ Keep as string
+      parseInt(userId), // ✅ FIX: Convert to Int
       `Material request for "${name}" has been submitted for approval`,
       'INFO'
     );
@@ -220,7 +221,8 @@ export const createMaterialRequest = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Create material request error:', error);
+    console.error('❌ Create material request error:', error);
+    console.error('Error details:', error.message);
     res.status(500).json({ 
       success: false,
       error: 'Failed to create material request',
@@ -228,25 +230,114 @@ export const createMaterialRequest = async (req, res) => {
     });
   }
 };
+// Add this function to your materialRequestController.js
 
-export const approveMaterialRequest = async (req, res) => {
+export const getAllRequests = async (req, res) => {
   try {
-    const { id } = req.params;
-    const reviewerId = req.user?.id || req.user?.userId;
     const { companyId } = req.user;
-    const { approvalNotes } = req.body;
 
-    if (!reviewerId || !companyId) {
+    if (!companyId) {
       return res.status(400).json({ 
         success: false,
-        error: 'User information not found' 
+        error: 'Company ID not found' 
       });
     }
 
-    const requestIdValue = isNaN(id) ? id : parseInt(id);
+    console.log('Fetching all requests for company:', companyId);
+
+    // Fetch ALL requests (not just pending) for the company
+    const requests = await prisma.materialRequest.findMany({
+      where: {
+        employee: {
+          companyId: String(companyId)
+        }
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            empId: true
+          }
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            projectId: true
+          }
+        },
+        material: {
+          select: {
+            id: true,
+            materialId: true,
+            name: true
+          }
+        },
+        reviewer: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    }).catch(err => {
+      console.error('Prisma query error:', err);
+      return [];
+    });
+
+    const requestsWithProjectName = requests.map(req => ({
+      ...req,
+      projectName: req.project?.name || null
+    }));
+
+    console.log(`Found ${requestsWithProjectName.length} total requests`);
+
+    res.json({ 
+      success: true,
+      count: requestsWithProjectName.length,
+      requests: requestsWithProjectName 
+    });
+  } catch (error) {
+    console.error('Get all requests error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch requests',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+export const approveMaterialRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approvalNotes } = req.body;
+    
+    console.log('📝 Approving request ID:', id);
+    console.log('👤 Request user:', req.user);
+    
+    // ✅ FIX: Use engineerId instead of user id
+    const reviewerId = req.user?.engineerId;
+    const { companyId } = req.user;
+
+    if (!reviewerId) {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Your account is not linked to an engineer profile. Please contact administrator.' 
+      });
+    }
+
+    if (!companyId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Company ID not found' 
+      });
+    }
+    
+    console.log('✅ Reviewer Engineer ID:', reviewerId);
 
     const request = await prisma.materialRequest.findUnique({
-      where: { id: requestIdValue },
+      where: { id: parseInt(id) },
       include: {
         employee: true,
         project: true
@@ -276,12 +367,18 @@ export const approveMaterialRequest = async (req, res) => {
 
     const result = await prisma.$transaction(async (tx) => {
       const updatedRequest = await tx.materialRequest.update({
-        where: { id: requestIdValue },
+        where: { id: parseInt(id) },
         data: {
           status: 'APPROVED',
           reviewDate: new Date(),
           approvalNotes: approvalNotes || null,
-          reviewedBy: String(reviewerId) // ✅ Keep as string
+          reviewedBy: reviewerId // ✅ NOW THIS IS AN INTEGER (Engineer ID)
+        },
+        include: {
+          employee: true,
+          project: true,
+          material: true,
+          reviewer: true
         }
       });
 
@@ -296,7 +393,7 @@ export const approveMaterialRequest = async (req, res) => {
             defaultRate: request.defaultRate,
             vendor: request.vendor,
             description: request.description,
-            companyId: String(companyId) // ✅ Keep as string
+            companyId: String(companyId)
           }
         });
       } else if (request.type === 'PROJECT') {
@@ -310,7 +407,7 @@ export const approveMaterialRequest = async (req, res) => {
             defaultRate: request.defaultRate,
             vendor: request.vendor,
             description: request.description,
-            companyId: String(companyId) // ✅ Keep as string
+            companyId: String(companyId)
           }
         });
 
@@ -339,10 +436,12 @@ export const approveMaterialRequest = async (req, res) => {
     });
 
     await createNotification(
-      request.employeeId, // Already a string from DB
+      request.employeeId,
       `Your request for "${request.name}" has been approved`,
       'SUCCESS'
     );
+
+    console.log('✅ Request approved successfully');
 
     res.json({ 
       success: true,
@@ -350,7 +449,7 @@ export const approveMaterialRequest = async (req, res) => {
       request: result 
     });
   } catch (error) {
-    console.error('Approve request error:', error);
+    console.error('❌ Approve request error:', error);
     res.status(500).json({ 
       success: false,
       error: 'Failed to approve request',
@@ -362,28 +461,40 @@ export const approveMaterialRequest = async (req, res) => {
 export const rejectMaterialRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const reviewerId = req.user?.id || req.user?.userId;
-    const { companyId } = req.user;
     const { rejectionReason } = req.body;
+    
+    console.log('📝 Rejecting request ID:', id);
+    console.log('👤 Request user:', req.user);
+    
+    // ✅ FIX: Use engineerId instead of user id
+    const reviewerId = req.user?.engineerId;
+    const { companyId } = req.user;
 
-    if (!reviewerId || !companyId) {
-      return res.status(400).json({ 
+    if (!reviewerId) {
+      return res.status(403).json({ 
         success: false,
-        error: 'User information not found' 
+        error: 'Your account is not linked to an engineer profile. Please contact administrator.' 
       });
     }
 
-    if (!rejectionReason) {
+    if (!companyId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Company ID not found' 
+      });
+    }
+
+    if (!rejectionReason || !rejectionReason.trim()) {
       return res.status(400).json({ 
         success: false,
         error: 'Rejection reason is required' 
       });
     }
-
-    const requestIdValue = isNaN(id) ? id : parseInt(id);
+    
+    console.log('✅ Reviewer Engineer ID:', reviewerId);
 
     const request = await prisma.materialRequest.findUnique({
-      where: { id: requestIdValue },
+      where: { id: parseInt(id) },
       include: {
         employee: true
       }
@@ -411,20 +522,28 @@ export const rejectMaterialRequest = async (req, res) => {
     }
 
     const updatedRequest = await prisma.materialRequest.update({
-      where: { id: requestIdValue },
+      where: { id: parseInt(id) },
       data: {
         status: 'REJECTED',
         reviewDate: new Date(),
-        rejectionReason,
-        reviewedBy: String(reviewerId) // ✅ Keep as string
+        rejectionReason: rejectionReason.trim(),
+        reviewedBy: reviewerId // ✅ NOW THIS IS AN INTEGER (Engineer ID)
+      },
+      include: {
+        employee: true,
+        project: true,
+        material: true,
+        reviewer: true
       }
     });
 
     await createNotification(
-      request.employeeId, // Already a string from DB
-      `Your request for "${request.name}" has been rejected`,
+      request.employeeId,
+      `Your request for "${request.name}" has been rejected: ${rejectionReason}`,
       'ERROR'
     );
+
+    console.log('✅ Request rejected successfully');
 
     res.json({ 
       success: true,
@@ -432,7 +551,7 @@ export const rejectMaterialRequest = async (req, res) => {
       request: updatedRequest 
     });
   } catch (error) {
-    console.error('Reject request error:', error);
+    console.error('❌ Reject request error:', error);
     res.status(500).json({ 
       success: false,
       error: 'Failed to reject request',
