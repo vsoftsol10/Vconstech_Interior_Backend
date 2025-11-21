@@ -316,16 +316,9 @@ export const approveMaterialRequest = async (req, res) => {
     console.log('📝 Approving request ID:', id);
     console.log('👤 Request user:', req.user);
     
-    // ✅ FIX: Use engineerId instead of user id
-    const reviewerId = req.user?.engineerId;
+    // ✅ FIX: Allow null for Admin users without engineer profile
+    const reviewerId = req.user?.engineerId || null;
     const { companyId } = req.user;
-
-    if (!reviewerId) {
-      return res.status(403).json({ 
-        success: false,
-        error: 'Your account is not linked to an engineer profile. Please contact administrator.' 
-      });
-    }
 
     if (!companyId) {
       return res.status(400).json({ 
@@ -334,7 +327,7 @@ export const approveMaterialRequest = async (req, res) => {
       });
     }
     
-    console.log('✅ Reviewer Engineer ID:', reviewerId);
+    console.log('✅ Reviewer Engineer ID (null is OK for Admin):', reviewerId);
 
     const request = await prisma.materialRequest.findUnique({
       where: { id: parseInt(id) },
@@ -372,7 +365,7 @@ export const approveMaterialRequest = async (req, res) => {
           status: 'APPROVED',
           reviewDate: new Date(),
           approvalNotes: approvalNotes || null,
-          reviewedBy: reviewerId // ✅ NOW THIS IS AN INTEGER (Engineer ID)
+          reviewedBy: reviewerId // ✅ Can be null - schema allows it
         },
         include: {
           employee: true,
@@ -466,16 +459,9 @@ export const rejectMaterialRequest = async (req, res) => {
     console.log('📝 Rejecting request ID:', id);
     console.log('👤 Request user:', req.user);
     
-    // ✅ FIX: Use engineerId instead of user id
-    const reviewerId = req.user?.engineerId;
+    // ✅ FIX: Allow null for Admin users without engineer profile
+    const reviewerId = req.user?.engineerId || null;
     const { companyId } = req.user;
-
-    if (!reviewerId) {
-      return res.status(403).json({ 
-        success: false,
-        error: 'Your account is not linked to an engineer profile. Please contact administrator.' 
-      });
-    }
 
     if (!companyId) {
       return res.status(400).json({ 
@@ -491,7 +477,7 @@ export const rejectMaterialRequest = async (req, res) => {
       });
     }
     
-    console.log('✅ Reviewer Engineer ID:', reviewerId);
+    console.log('✅ Reviewer Engineer ID (null is OK for Admin):', reviewerId);
 
     const request = await prisma.materialRequest.findUnique({
       where: { id: parseInt(id) },
@@ -527,7 +513,7 @@ export const rejectMaterialRequest = async (req, res) => {
         status: 'REJECTED',
         reviewDate: new Date(),
         rejectionReason: rejectionReason.trim(),
-        reviewedBy: reviewerId // ✅ NOW THIS IS AN INTEGER (Engineer ID)
+        reviewedBy: reviewerId // ✅ Can be null - schema allows it
       },
       include: {
         employee: true,

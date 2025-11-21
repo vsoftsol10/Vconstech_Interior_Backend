@@ -5,6 +5,248 @@ import { generateMaterialId } from '../utils/generateId.js';
 const prisma = new PrismaClient();
 
 /**
+ * Get dashboard data (metrics + recent usage logs)
+ * GET /api/materials/dashboard
+ */
+export const getDashboard = async (req, res) => {
+  try {
+    const { companyId } = req.user;
+
+    // Get total materials count
+    const totalMaterials = await prisma.material.count({
+      where: { companyId }
+    });
+
+    // Get active materials in projects (materials assigned to ongoing/pending projects)
+    // FIX: Use groupBy instead of findMany with distinct
+    const activeMaterialsData = await prisma.projectMaterial.groupBy({
+      by: ['materialId'],
+      where: {
+        status: 'ACTIVE',
+        project: {
+          companyId,
+          status: {
+            in: ['PENDING', 'ONGOING']
+          }
+        }
+      }
+    });
+    const activeMaterials = activeMaterialsData.length;
+
+    // Calculate total cost of used materials
+    const materialUsages = await prisma.materialUsage.findMany({
+      where: {
+        project: { companyId }
+      },
+      include: {
+        material: {
+          select: {
+            defaultRate: true
+          }
+        }
+      }
+    });
+
+    const totalCost = materialUsages.reduce((sum, usage) => {
+      const rate = usage.material.defaultRate || 0;
+      return sum + (usage.quantity * rate);
+    }, 0);
+
+    // Get recent material usage logs (last 10)
+    const recentUsageLogs = await prisma.materialUsage.findMany({
+      where: {
+        project: { companyId }
+      },
+      include: {
+        material: {
+          select: {
+            id: true,
+            name: true,
+            unit: true
+          }
+        },
+        project: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        user: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        date: 'desc'
+      },
+      take: 10
+    });
+
+    // Format usage logs
+    const formattedUsageLogs = recentUsageLogs.map(log => ({
+      id: log.id,
+      date: log.date.toISOString().split('T')[0],
+      projectId: log.projectId,
+      projectName: log.project.name,
+      materialId: log.materialId,
+      materialName: log.material.name,
+      quantity: log.quantity,
+      unit: log.material.unit,
+      remarks: log.remarks,
+      userId: log.userId,
+      userName: log.user.name
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        metrics: {
+          totalMaterials,
+          activeMaterials,
+          totalCost: Math.round(totalCost * 100) / 100
+        },
+        usageLogs: formattedUsageLogs
+      }
+    });
+  } catch (error) {
+    console.error('Get dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch dashboard data',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Get material usage statistics
+ * GET /api/materials/usage-stats
+ */
+export const getUsageStats = async (req, res) => {
+  try {
+    const { companyId } = req.user;
+    const { projectId, materialId, startDate, endDate } = req.query;
+
+    const whereClause = {
+      project: { companyId }
+    };
+
+    if (projectId) {
+      whereClause.projectId = parseInt(projectId);
+    }
+
+    if (materialId) {
+      whereClause.materialId = parseInt(materialId);
+    }
+
+    if (startDate || endDate) {
+      whereClause.date = {};
+      if (startDate) {
+        whereClause.date.gte = new Date(startDate);
+      }
+      if (endDate) {
+        whereClause.date.lte = new Date(endDate);
+      }
+    }
+
+    const usageStats = await prisma.materialUsage.groupBy({
+      by: ['materialId'],
+      where: whereClause,
+      _sum: {
+        quantity: true
+      },
+      _count: {
+        id: true
+      }
+    });
+
+    // Enrich with material details
+    const enrichedStats = await Promise.all(
+      usageStats.map(async (stat) => {
+        const material = await prisma.material.findUnique({
+          where: { id: stat.materialId }
+        });
+
+        const totalCost = (stat._sum.quantity || 0) * (material?.defaultRate || 0);
+
+        return {
+          materialId: stat.materialId,
+          materialName: material?.name,
+          unit: material?.unit,
+          totalQuantityUsed: stat._sum.quantity || 0,
+          usageCount: stat._count.id,
+          totalCost: Math.round(totalCost * 100) / 100
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      stats: enrichedStats
+    });
+  } catch (error) {
+    console.error('Get usage stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch usage statistics',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Get project-wise material usage summary
+ * GET /api/materials/project-summary
+ */
+export const getProjectSummary = async (req, res) => {
+  try {
+    const { companyId } = req.user;
+
+    const projects = await prisma.project.findMany({
+      where: { companyId },
+      include: {
+        materialUsages: {
+          include: {
+            material: true
+          }
+        }
+      }
+    });
+
+    const summary = projects.map(project => {
+      const totalCost = project.materialUsages.reduce((sum, usage) => {
+        const rate = usage.material.defaultRate || 0;
+        return sum + (usage.quantity * rate);
+      }, 0);
+
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        projectType: project.projectType,
+        status: project.status,
+        materialsUsedCount: new Set(project.materialUsages.map(u => u.materialId)).size,
+        totalUsageCount: project.materialUsages.length,
+        totalCost: Math.round(totalCost * 100) / 100
+      };
+    });
+
+    res.json({
+      success: true,
+      summary
+    });
+  } catch (error) {
+    console.error('Get project summary error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch project summary',
+      details: error.message
+    });
+  }
+};
+
+/**
  * Get all materials for a company
  * GET /api/materials
  */
@@ -274,7 +516,6 @@ export const deleteMaterial = async (req, res) => {
  * Get material categories
  * GET /api/materials/categories
  */
-// In materialController.js - Update getCategories function
 export const getCategories = async (req, res) => {
   try {
     const { companyId } = req.user;
@@ -285,7 +526,6 @@ export const getCategories = async (req, res) => {
       distinct: ['category']
     });
 
-    // ✅ Don't include 'All' - let frontend handle it
     const categories = materials.map(m => m.category).filter(Boolean);
 
     res.json({ 
