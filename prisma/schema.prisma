@@ -18,11 +18,8 @@ model User {
   updatedAt          DateTime            @updatedAt
   role               String
   uploadedFiles      File[]
-  materialUsages     MaterialUsage[]
   projectAssignments ProjectAssignment[]
-  // ✅ REMOVED - These are now in Engineer model
-  // materialRequests   MaterialRequest[]
-  // notifications      Notification[]
+  // ✅ REMOVED materialUsages - now in Engineer model
   company            Company?            @relation(fields: [companyId], references: [id])
 }
 
@@ -111,25 +108,25 @@ model ProjectMaterial {
   @@index([status])
 }
 
+// ✅ UPDATED: Now references Engineer instead of User
 model MaterialUsage {
   id         Int      @id @default(autoincrement())
   materialId Int
   projectId  Int
-  userId     String
+  engineerId Int      // Changed from userId (String) to engineerId (Int)
   quantity   Float
   remarks    String?
   date       DateTime @default(now())
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([materialId])
-  @@index([userId])
+  @@index([engineerId])
   @@index([date])
 }
 
-// ✅ FIXED: Now uses Engineer (Int) instead of User (String UUID)
 model MaterialRequest {
   id              Int                 @id @default(autoincrement())
   requestId       String              @unique
@@ -164,7 +161,6 @@ model MaterialRequest {
   @@index([requestDate])
 }
 
-// ✅ FIXED: Now uses Engineer (Int) instead of User (String UUID)
 model Notification {
   id         Int              @id @default(autoincrement())
   engineerId Int
@@ -233,7 +229,7 @@ model Company {
   @@map("companies")
 }
 
-// ✅ ENHANCED: Added material requests and notifications
+// ✅ ENHANCED: Added materialUsages relation
 model Engineer {
   id               Int               @id @default(autoincrement())
   name             String
@@ -252,6 +248,7 @@ model Engineer {
   materialRequests MaterialRequest[] @relation("EmployeeRequests")
   reviewedRequests MaterialRequest[] @relation("ReviewedRequests")
   notifications    Notification[]
+  materialUsages   MaterialUsage[]   // ✅ ADDED: Material usage tracking
 
   @@unique([empId, companyId])
   @@unique([username, companyId])

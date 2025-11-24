@@ -1,6 +1,7 @@
+// routes/materialRequestRoutes.js
 import express from 'express';
-import { 
-  getAllRequests,        // ✅ ADD THIS IMPORT
+import {
+  getAllRequests,
   getMyRequests,
   getPendingRequests,
   createMaterialRequest,
@@ -11,26 +12,19 @@ import { authenticateToken, authorizeRole } from '../middlewares/authMiddlewares
 
 const router = express.Router();
 
-// All routes require authentication
+// ✅ All routes require authentication
 router.use(authenticateToken);
 
-// ✅ IMPORTANT: Put specific routes BEFORE general routes
-// GET /api/material-requests/my-requests (Employee)
+// ✅ IMPORTANT: Specific routes BEFORE parameterized routes
 router.get('/my-requests', getMyRequests);
-
-// GET /api/material-requests/pending (Admin only)
 router.get('/pending', authorizeRole('Admin'), getPendingRequests);
 
-// ✅ ADD THIS: GET /api/material-requests (Admin only - Get ALL requests)
+// ✅ Admin-only routes
 router.get('/', authorizeRole('Admin'), getAllRequests);
-
-// POST /api/material-requests (Employee)
 router.post('/', createMaterialRequest);
 
-// PUT /api/material-requests/:id/approve (Admin only)
+// ✅ CRITICAL: These are the routes failing with 403
 router.put('/:id/approve', authorizeRole('Admin'), approveMaterialRequest);
-
-// PUT /api/material-requests/:id/reject (Admin only)
 router.put('/:id/reject', authorizeRole('Admin'), rejectMaterialRequest);
 
 export default router;

@@ -414,15 +414,40 @@ export const approveMaterialRequest = async (req, res) => {
           }
         });
       } else if (request.type === 'PROJECT_MATERIAL') {
-        await tx.projectMaterial.create({
-          data: {
-            projectId: request.projectId,
-            materialId: request.materialId,
-            assigned: request.quantity,
-            used: 0,
-            status: 'NOT_USED'
+        // 🔥 FIX: Check if ProjectMaterial already exists
+        const existingProjectMaterial = await tx.projectMaterial.findUnique({
+          where: {
+            projectId_materialId: {
+              projectId: request.projectId,
+              materialId: request.materialId
+            }
           }
         });
+
+        if (existingProjectMaterial) {
+          // Update existing record - add to the assigned quantity
+          await tx.projectMaterial.update({
+            where: { id: existingProjectMaterial.id },
+            data: {
+              assigned: existingProjectMaterial.assigned + request.quantity,
+              status: 'ACTIVE', // Update status to ACTIVE if needed
+              updatedAt: new Date()
+            }
+          });
+          console.log('✅ Updated existing ProjectMaterial with additional quantity');
+        } else {
+          // Create new record
+          await tx.projectMaterial.create({
+            data: {
+              projectId: request.projectId,
+              materialId: request.materialId,
+              assigned: request.quantity,
+              used: 0,
+              status: 'ACTIVE'
+            }
+          });
+          console.log('✅ Created new ProjectMaterial');
+        }
       }
 
       return updatedRequest;
@@ -446,7 +471,7 @@ export const approveMaterialRequest = async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to approve request',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message
     });
   }
 };

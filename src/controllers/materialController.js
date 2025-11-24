@@ -18,7 +18,6 @@ export const getDashboard = async (req, res) => {
     });
 
     // Get active materials in projects (materials assigned to ongoing/pending projects)
-    // FIX: Use groupBy instead of findMany with distinct
     const activeMaterialsData = await prisma.projectMaterial.groupBy({
       by: ['materialId'],
       where: {
@@ -52,7 +51,8 @@ export const getDashboard = async (req, res) => {
       return sum + (usage.quantity * rate);
     }, 0);
 
-    // Get recent material usage logs (last 10)
+    // ✅ FIXED: Get recent material usage logs (last 10)
+    // Changed 'user' to 'engineer'
     const recentUsageLogs = await prisma.materialUsage.findMany({
       where: {
         project: { companyId }
@@ -71,7 +71,7 @@ export const getDashboard = async (req, res) => {
             name: true
           }
         },
-        user: {
+        engineer: {  // ✅ Changed from 'user' to 'engineer'
           select: {
             id: true,
             name: true
@@ -84,7 +84,8 @@ export const getDashboard = async (req, res) => {
       take: 10
     });
 
-    // Format usage logs
+    // ✅ FIXED: Format usage logs
+    // Changed 'log.user' to 'log.engineer' and 'userId' to 'engineerId'
     const formattedUsageLogs = recentUsageLogs.map(log => ({
       id: log.id,
       date: log.date.toISOString().split('T')[0],
@@ -95,8 +96,8 @@ export const getDashboard = async (req, res) => {
       quantity: log.quantity,
       unit: log.material.unit,
       remarks: log.remarks,
-      userId: log.userId,
-      userName: log.user.name
+      engineerId: log.engineerId,  // ✅ Changed from 'userId'
+      userName: log.engineer.name   // ✅ Changed from 'log.user.name'
     }));
 
     res.json({
@@ -326,10 +327,10 @@ export const getMaterialById = async (req, res) => {
                 projectId: true
               }
             },
-            user: {
+            engineer: {  // ✅ Changed from 'user' to 'engineer'
               select: {
                 name: true,
-                email: true
+                empId: true  // ✅ Changed from 'email' to 'empId' (Engineer doesn't have email)
               }
             }
           }

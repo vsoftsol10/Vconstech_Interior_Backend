@@ -39,11 +39,11 @@ export const getUsageLogs = async (req, res) => {
       where: { projectId: parseInt(projectId) },
       include: {
         material: true,
-        user: {
+        engineer: {
           select: {
             id: true,
             name: true,
-            email: true
+            empId: true
           }
         }
       },
@@ -71,7 +71,7 @@ export const getUsageLogs = async (req, res) => {
  */
 export const createUsageLog = async (req, res) => {
   try {
-    const { id: userId, companyId } = req.user;
+    const { id: engineerId, companyId } = req.user;
     const { projectId, materialId, quantity, remarks, date } = req.body;
 
     // Validation
@@ -128,17 +128,17 @@ export const createUsageLog = async (req, res) => {
         data: {
           projectId: parseInt(projectId),
           materialId: parseInt(materialId),
-          userId,
+          engineerId: engineerId, // ✅ FIXED: Now uses engineerId directly (Int)
           quantity: usageQuantity,
           remarks: remarks || null,
           date: date ? new Date(date) : new Date()
         },
         include: {
           material: true,
-          user: {
+          engineer: {
             select: {
               name: true,
-              email: true
+              empId: true
             }
           }
         }
@@ -222,10 +222,10 @@ export const updateUsageLog = async (req, res) => {
         },
         include: {
           material: true,
-          user: {
+          engineer: {
             select: {
               name: true,
-              email: true
+              empId: true
             }
           }
         }
