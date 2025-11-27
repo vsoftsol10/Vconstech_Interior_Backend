@@ -149,9 +149,166 @@ router.post('/login', async (req, res) => {
   }
 });
 
+router.get('/my-projects', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 Fetching projects for engineer:', req.user);
+
+    // Check if the user is an engineer
+    if (req.user.type !== 'engineer' && req.user.role !== 'Site_Engineer') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. This endpoint is for engineers only.' 
+      });
+    }
+
+    const engineerId = req.user.id;
+    const companyId = req.user.companyId;
+
+    console.log('Engineer ID:', engineerId);
+    console.log('Company ID:', companyId);
+
+    // Try different possible schema structures
+    let projects = [];
+    
+    try {
+      // Attempt 1: Many-to-many relationship with 'engineers' field
+      projects = await prisma.project.findMany({
+        where: {
+          companyId: companyId,
+          engineers: {
+            some: {
+              id: engineerId
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+      console.log('✅ Method 1 worked: Found projects via engineers relation');
+    } catch (error1) {
+      console.log('⚠️ Method 1 failed, trying alternative...');
+      
+      try {
+        // Attempt 2: Direct field like 'engineerId' or 'assignedEngineerId'
+        projects = await prisma.project.findMany({
+          where: {
+            companyId: companyId,
+            OR: [
+              { engineerId: engineerId },
+              { assignedEngineerId: engineerId },
+              { assignedToId: engineerId }
+            ]
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        });
+        console.log('✅ Method 2 worked: Found projects via direct field');
+      } catch (error2) {
+        console.log('⚠️ Method 2 failed, trying join table...');
+        
+        // Attempt 3: Through a join table
+        const engineerWithProjects = await prisma.engineer.findUnique({
+          where: { id: engineerId },
+          include: {
+            projects: {
+              where: {
+                companyId: companyId
+              },
+              orderBy: {
+                createdAt: 'desc'
+              }
+            }
+          }
+        });
+        
+        if (engineerWithProjects) {
+          projects = engineerWithProjects.projects || [];
+          console.log('✅ Method 3 worked: Found projects via engineer relation');
+        }
+      }
+    }
+
+    console.log(`✅ Found ${projects.length} projects for engineer ${req.user.name}`);
+
+    res.json({ 
+      success: true,
+      projects,
+      count: projects.length,
+      message: `Found ${projects.length} assigned projects`
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching engineer projects:', error);
+    console.error('Error details:', error.message);
+    console.error('Stack trace:', error.stack);
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch assigned projects',
+      details: error.message 
+    });
+  }
+});
+
+// Get engineer's own profile
+router.get('/my-profile', authenticateToken, async (req, res) => {
+  try {
+    // Check if the user is an engineer
+    if (req.user.type !== 'engineer' && req.user.role !== 'Site_Engineer') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. This endpoint is for engineers only.' 
+      });
+    }
+
+    const engineer = await prisma.engineer.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        name: true,
+        empId: true,
+        phone: true,
+        alternatePhone: true,
+        address: true,
+        profileImage: true,
+        username: true,
+        createdAt: true,
+        company: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    if (!engineer) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Engineer profile not found' 
+      });
+    }
+
+    res.json({ 
+      success: true,
+      engineer 
+    });
+
+  } catch (error) {
+    console.error('Error fetching engineer profile:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch profile' 
+    });
+  }
+});
+
 // ============================================
 // ADMIN ROUTES (Protected)
 // ============================================
+
 
 // Get all engineers for the authenticated user's company
 router.get('/', authenticateToken, async (req, res) => {

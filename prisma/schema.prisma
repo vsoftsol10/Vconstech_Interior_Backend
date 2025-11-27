@@ -17,9 +17,8 @@ model User {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   role               String
-  uploadedFiles      File[]
+  uploadedFiles      File[]              // This should already exist
   projectAssignments ProjectAssignment[]
-  // ✅ REMOVED materialUsages - now in Engineer model
   company            Company?            @relation(fields: [companyId], references: [id])
 }
 
@@ -30,9 +29,11 @@ model Project {
   companyId          String
   startDate          DateTime?
   endDate            DateTime?
+  dueDate            DateTime?              // ✅ ADDED: For frontend due date display
   status             ProjectStatus          @default(ONGOING)
   createdAt          DateTime               @default(now())
   budget             Float?
+  quotationAmount    Float?                 // ✅ ADDED: Required by frontend
   clientName         String
   projectId          String                 @unique
   projectType        String
@@ -40,6 +41,7 @@ model Project {
   assignedEngineerId Int?
   contracts          Contract[]
   files              File[]
+  expenses           ProjectExpense[]       // ✅ ADDED: Direct expense tracking
   finances           FinancialTransaction[]
   materialUsages     MaterialUsage[]
   projectMaterials   ProjectMaterial[]
@@ -52,6 +54,20 @@ model Project {
   @@index([projectId])
   @@index([status])
   @@index([assignedEngineerId])
+}
+
+// ✅ NEW MODEL: Direct expense tracking that matches frontend structure
+model ProjectExpense {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  category  String   // e.g., "Interior Design", "Furniture", "Lighting"
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([category])
 }
 
 model ProjectAssignment {
@@ -108,12 +124,11 @@ model ProjectMaterial {
   @@index([status])
 }
 
-// ✅ UPDATED: Now references Engineer instead of User
 model MaterialUsage {
   id         Int      @id @default(autoincrement())
   materialId Int
   projectId  Int
-  engineerId Int      // Changed from userId (String) to engineerId (Int)
+  engineerId Int
   quantity   Float
   remarks    String?
   date       DateTime @default(now())
@@ -188,10 +203,12 @@ model Contract {
   @@index([projectId])
 }
 
+// ✅ UPDATED: Added category field for expense categorization
 model FinancialTransaction {
   id          Int             @id @default(autoincrement())
   projectId   Int
   type        TransactionType
+  category    String?         // ✅ ADDED: For categorizing expenses (Interior Design, Furniture, etc.)
   amount      Float
   description String?
   date        DateTime        @default(now())
@@ -199,21 +216,34 @@ model FinancialTransaction {
 
   @@index([projectId])
   @@index([type])
+  @@index([category])
   @@index([date])
 }
 
 model File {
-  id         Int      @id @default(autoincrement())
-  projectId  Int
-  uploadedBy String
-  fileUrl    String
-  fileName   String?
-  uploadedAt DateTime @default(now())
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  id                   Int      @id @default(autoincrement())
+  projectId            Int
+  
+  // For Admin uploads (User table - UUID)
+  uploadedBy           String?  
+  
+  // For Engineer uploads (Engineer table - Int)
+  uploadedByEngineerId Int?     
+  
+  fileUrl              String
+  fileName             String?
+  documentType         String?  // Contract, Invoice, Blueprint, etc.
+  fileSize             Int?     // File size in bytes
+  uploadedAt           DateTime @default(now())
+  
+  // Relations
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                 User?     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  engineer             Engineer? @relation(fields: [uploadedByEngineerId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([uploadedBy])
+  @@index([uploadedByEngineerId])
 }
 
 model Company {
@@ -229,7 +259,6 @@ model Company {
   @@map("companies")
 }
 
-// ✅ ENHANCED: Added materialUsages relation
 model Engineer {
   id               Int               @id @default(autoincrement())
   name             String
@@ -243,12 +272,15 @@ model Engineer {
   companyId        String
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  
+  // Relations
   company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projects         Project[]
   materialRequests MaterialRequest[] @relation("EmployeeRequests")
   reviewedRequests MaterialRequest[] @relation("ReviewedRequests")
   notifications    Notification[]
-  materialUsages   MaterialUsage[]   // ✅ ADDED: Material usage tracking
+  materialUsages   MaterialUsage[]
+  uploadedFiles    File[]            // ✅ ADD THIS LINE
 
   @@unique([empId, companyId])
   @@unique([username, companyId])

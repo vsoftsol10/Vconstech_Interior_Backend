@@ -9,12 +9,15 @@ import projectRoutes from './src/routes/projectRoute.js';
 import engineerRoutes from './src/routes/engineerRoute.js';
 import userRoute from './src/routes/userRoute.js';
 
-// ✅ NEW: Material Management Routes
+// ✅ Material Management Routes
 import materialRoutes from './src/routes/materialRoutes.js';
 import projectMaterialRoutes from './src/routes/projectMaterialRoutes.js';
 import materialRequestRoutes from './src/routes/materialRequestRoutes.js';
 import usageLogRoutes from './src/routes/usageLogRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
+
+// ✅ NEW: Financial Management Routes
+import financialRoutes from './src/routes/financialRoutes.js';
 
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { PrismaClient } from './generated/prisma/index.js';
@@ -43,12 +46,15 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/engineers', engineerRoutes);
 app.use('/api/users', userRoute);
 
-// ========== NEW: MATERIAL MANAGEMENT ROUTES ==========
+// ========== MATERIAL MANAGEMENT ROUTES ==========
 app.use('/api/materials', materialRoutes);
 app.use('/api/project-materials', projectMaterialRoutes);
 app.use('/api/material-requests', materialRequestRoutes);
 app.use('/api/usage-logs', usageLogRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+// ========== NEW: FINANCIAL MANAGEMENT ROUTES ==========
+app.use('/api/financial', financialRoutes);
 
 // ========== EXISTING ENDPOINTS ==========
 app.get('/api/employees', 
@@ -141,6 +147,7 @@ process.on('SIGINT', async () => {
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📊 API available at http://localhost:${PORT}/api`);
+  console.log(`💰 Financial API: http://localhost:${PORT}/api/financial`);
 });
 
 export default app;

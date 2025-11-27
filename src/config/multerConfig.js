@@ -24,11 +24,15 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter for 3D design files
+// File filter - UPDATED to match frontend requirements
 const fileFilter = (req, file, cb) => {
   const allowedExtensions = [
-    '.dwg', '.dxf', '.skp', '.obj', '.fbx', 
-    '.3ds', '.stl', '.rvt', '.ifc', '.pdf', '.docx'
+    '.pdf', '.doc', '.docx',           // Documents
+    '.jpg', '.jpeg', '.png',           // Images
+    '.xlsx', '.xls',                   // Spreadsheets
+    '.dwg', '.dxf',                    // CAD files
+    '.skp', '.obj', '.fbx',            // 3D files
+    '.3ds', '.stl', '.rvt', '.ifc'     // Other design files
   ];
   
   const ext = path.extname(file.originalname).toLowerCase();
@@ -36,7 +40,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only 3D design files are allowed.'));
+    cb(new Error(`Invalid file type: ${ext}. Allowed types: ${allowedExtensions.join(', ')}`));
   }
 };
 

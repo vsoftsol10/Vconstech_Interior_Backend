@@ -429,18 +429,28 @@ export const deleteProject = async (req, res) => {
   }
 };
 
-// Upload project file
 export const uploadProjectFile = async (req, res) => {
   try {
-      console.log('=== FILE UPLOAD DEBUG ===');
-    console.log('req.file:', req.file);  // ✅ Add this
-    console.log('req.body:', req.body);  // ✅ Add this
+    console.log('=== FILE UPLOAD DEBUG ===');
+    console.log('req.file:', req.file);
+    console.log('req.body:', req.body);
+    console.log('req.user:', {
+      id: req.user.id,
+      role: req.user.role,
+      companyId: req.user.companyId,
+      name: req.user.name,
+      type: req.user.type
+    });
     console.log('=======================');
+    
     const { id } = req.params;
     const companyId = req.user.companyId;
-    const userId = req.user.userId;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const userType = req.user.type; // 'user' or 'engineer'
+    const { documentType } = req.body;
 
-    // Check if project exists and belongs to user's company
+    // Verify project exists and belongs to company
     const project = await prisma.project.findFirst({
       where: {
         id: parseInt(id),
@@ -449,53 +459,106 @@ export const uploadProjectFile = async (req, res) => {
     });
 
     if (!project) {
+      if (req.file) {
+        const filePath = path.join(__dirname, '../../uploads/project-files', req.file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
       return res.status(404).json({ 
+        success: false,
         error: 'Project not found' 
       });
     }
 
-    // Check if file was uploaded
     if (!req.file) {
       return res.status(400).json({ 
+        success: false,
         error: 'No file uploaded' 
       });
     }
 
-    // Save file info to database
+    const fileSize = req.file.size;
+
+    // ✅ Build file data based on uploader type
+    const fileData = {
+      projectId: parseInt(id),
+      fileUrl: `/uploads/project-files/${req.file.filename}`,
+      fileName: req.file.originalname,
+      documentType: documentType || null,
+      fileSize: fileSize
+    };
+
+    // ✅ Set correct uploader field
+    // Engineer: uploadedByEngineerId (Int)
+    // Admin: uploadedBy (String/UUID)
+    if (userType === 'engineer' || userRole === 'Site_Engineer') {
+      fileData.uploadedByEngineerId = userId; // Engineer ID (Int)
+      console.log('👷 Engineer upload - ID:', userId);
+    } else {
+      fileData.uploadedBy = userId; // User/Admin ID (String)
+      console.log('👤 Admin upload - ID:', userId);
+    }
+
+    console.log('📝 Creating file with data:', fileData);
+
+    // ✅ Create file with appropriate include
     const file = await prisma.file.create({
-      data: {
-        projectId: parseInt(id),
-        uploadedBy: userId,
-        fileUrl: `/uploads/project-files/${req.file.filename}`,
-        fileName: req.file.originalname
-      },
+      data: fileData,
       include: {
         user: {
           select: {
             id: true,
-            name: true
+            name: true,
+            role: true
+          }
+        },
+        engineer: {
+          select: {
+            id: true,
+            name: true,
+            empId: true
           }
         }
       }
     });
 
+    const uploaderName = file.user?.name || file.engineer?.name || 'Unknown';
+    
+    console.log('✅ File uploaded successfully');
+    console.log('📄 File details:', {
+      id: file.id,
+      fileName: file.fileName,
+      documentType: file.documentType,
+      uploadedBy: uploaderName,
+      uploaderType: file.user ? 'Admin' : 'Engineer'
+    });
+
     res.status(201).json({
+      success: true,
       message: 'File uploaded successfully',
       file
     });
 
   } catch (error) {
-    console.error('Upload file error:', error);
+    console.error('💥 Upload file error:', error);
+    console.error('Error stack:', error.stack);
     
     // Clean up uploaded file if database save fails
     if (req.file) {
       const filePath = path.join(__dirname, '../../uploads/project-files', req.file.filename);
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        try {
+          fs.unlinkSync(filePath);
+          console.log('🗑️ Cleaned up uploaded file after error');
+        } catch (cleanupError) {
+          console.error('Error cleaning up file:', cleanupError);
+        }
       }
     }
     
     res.status(500).json({ 
+      success: false,
       error: 'Failed to upload file',
       details: error.message 
     });
@@ -505,7 +568,6 @@ export const uploadProjectFile = async (req, res) => {
 
 
 
-// Get all files for a project
 export const getProjectFiles = async (req, res) => {
   try {
     const { id } = req.params;
@@ -533,7 +595,15 @@ export const getProjectFiles = async (req, res) => {
         user: {
           select: {
             id: true,
-            name: true
+            name: true,
+            role: true
+          }
+        },
+        engineer: {
+          select: {
+            id: true,
+            name: true,
+            empId: true
           }
         }
       },
@@ -542,9 +612,17 @@ export const getProjectFiles = async (req, res) => {
       }
     });
 
+    // ✅ Format files to show uploader info correctly
+    const formattedFiles = files.map(file => ({
+      ...file,
+      uploaderName: file.user?.name || file.engineer?.name || 'Unknown',
+      uploaderType: file.user ? 'Admin' : 'Engineer',
+      uploaderRole: file.user?.role || 'Site_Engineer'
+    }));
+
     res.json({
-      count: files.length,
-      files
+      count: formattedFiles.length,
+      files: formattedFiles
     });
 
   } catch (error) {
@@ -595,6 +673,7 @@ export const deleteProjectFile = async (req, res) => {
     if (fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
+        console.log('🗑️ File deleted from filesystem');
       } catch (err) {
         console.error('Error deleting file from filesystem:', err);
       }
@@ -605,7 +684,10 @@ export const deleteProjectFile = async (req, res) => {
       where: { id: parseInt(fileId) }
     });
 
+    console.log('✅ File deleted successfully from database');
+
     res.json({
+      success: true,
       message: 'File deleted successfully'
     });
 
