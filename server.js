@@ -19,6 +19,9 @@ import notificationRoutes from './src/routes/notificationRoutes.js';
 // ✅ NEW: Financial Management Routes
 import financialRoutes from './src/routes/financialRoutes.js';
 
+//Contract Managment Routes
+import contractRoutes from './src/routes/contractRoutes.js';
+
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { PrismaClient } from './generated/prisma/index.js';
 
@@ -55,6 +58,9 @@ app.use('/api/notifications', notificationRoutes);
 
 // ========== NEW: FINANCIAL MANAGEMENT ROUTES ==========
 app.use('/api/financial', financialRoutes);
+
+// ========== NEW: Contract MANAGEMENT ROUTES ==========
+app.use('/api/contracts', contractRoutes);
 
 // ========== EXISTING ENDPOINTS ==========
 app.get('/api/employees', 

@@ -194,12 +194,16 @@ model Contract {
   id             Int      @id @default(autoincrement())
   projectId      Int
   contractorName String
+  contactNumber  String   // ✅ ADD
+  contractAmount Float    // ✅ ADD
+  workStatus     String   // ✅ ADD (or use enum)
   details        String?
   startDate      DateTime
   endDate        DateTime
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt 
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
+  
   @@index([projectId])
 }
 
