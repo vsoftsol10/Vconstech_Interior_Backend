@@ -17,7 +17,7 @@ model User {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   role               String
-  uploadedFiles      File[]              // This should already exist
+  uploadedFiles      File[]
   projectAssignments ProjectAssignment[]
   company            Company?            @relation(fields: [companyId], references: [id])
 }
@@ -29,11 +29,11 @@ model Project {
   companyId          String
   startDate          DateTime?
   endDate            DateTime?
-  dueDate            DateTime?              // ✅ ADDED: For frontend due date display
+  dueDate            DateTime?
   status             ProjectStatus          @default(ONGOING)
   createdAt          DateTime               @default(now())
   budget             Float?
-  quotationAmount    Float?                 // ✅ ADDED: Required by frontend
+  quotationAmount    Float?
   clientName         String
   projectId          String                 @unique
   projectType        String
@@ -41,11 +41,12 @@ model Project {
   assignedEngineerId Int?
   contracts          Contract[]
   files              File[]
-  expenses           ProjectExpense[]       // ✅ ADDED: Direct expense tracking
+  expenses           ProjectExpense[]
   finances           FinancialTransaction[]
   materialUsages     MaterialUsage[]
   projectMaterials   ProjectMaterial[]
   materialRequests   MaterialRequest[]
+  labours            Labour[]               // ✅ ADDED
   company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assignments        ProjectAssignment[]
   assignedEngineer   Engineer?              @relation(fields: [assignedEngineerId], references: [id], onDelete: SetNull)
@@ -56,11 +57,10 @@ model Project {
   @@index([assignedEngineerId])
 }
 
-// ✅ NEW MODEL: Direct expense tracking that matches frontend structure
 model ProjectExpense {
   id        Int      @id @default(autoincrement())
   projectId Int
-  category  String   // e.g., "Interior Design", "Furniture", "Lighting"
+  category  String
   amount    Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -194,9 +194,9 @@ model Contract {
   id             Int      @id @default(autoincrement())
   projectId      Int
   contractorName String
-  contactNumber  String   // ✅ ADD
-  contractAmount Float    // ✅ ADD
-  workStatus     String   // ✅ ADD (or use enum)
+  contactNumber  String
+  contractAmount Float
+  workStatus     String
   details        String?
   startDate      DateTime
   endDate        DateTime
@@ -207,12 +207,11 @@ model Contract {
   @@index([projectId])
 }
 
-// ✅ UPDATED: Added category field for expense categorization
 model FinancialTransaction {
   id          Int             @id @default(autoincrement())
   projectId   Int
   type        TransactionType
-  category    String?         // ✅ ADDED: For categorizing expenses (Interior Design, Furniture, etc.)
+  category    String?
   amount      Float
   description String?
   date        DateTime        @default(now())
@@ -227,20 +226,13 @@ model FinancialTransaction {
 model File {
   id                   Int      @id @default(autoincrement())
   projectId            Int
-  
-  // For Admin uploads (User table - UUID)
   uploadedBy           String?  
-  
-  // For Engineer uploads (Engineer table - Int)
   uploadedByEngineerId Int?     
-  
   fileUrl              String
   fileName             String?
-  documentType         String?  // Contract, Invoice, Blueprint, etc.
-  fileSize             Int?     // File size in bytes
+  documentType         String?
+  fileSize             Int?
   uploadedAt           DateTime @default(now())
-  
-  // Relations
   project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user                 User?     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
   engineer             Engineer? @relation(fields: [uploadedByEngineerId], references: [id], onDelete: Cascade)
@@ -259,6 +251,7 @@ model Company {
   projects  Project[]
   users     User[]
   engineers Engineer[]
+  labours   Labour[]   // ✅ ADDED
 
   @@map("companies")
 }
@@ -276,21 +269,52 @@ model Engineer {
   companyId        String
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
-  
-  // Relations
   company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projects         Project[]
   materialRequests MaterialRequest[] @relation("EmployeeRequests")
   reviewedRequests MaterialRequest[] @relation("ReviewedRequests")
   notifications    Notification[]
   materialUsages   MaterialUsage[]
-  uploadedFiles    File[]            // ✅ ADD THIS LINE
+  uploadedFiles    File[]
 
   @@unique([empId, companyId])
   @@unique([username, companyId])
   @@index([companyId])
   @@index([username])
   @@map("engineers")
+}
+
+// ✅ NEW: Labour Management Models
+model Labour {
+  id        Int              @id @default(autoincrement())
+  name      String
+  phone     String
+  address   String?
+  companyId String
+  projectId Int?             // Optional: link to specific project
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  payments  LabourPayment[]
+  
+  @@index([companyId])
+  @@index([projectId])
+  @@index([phone])
+}
+
+model LabourPayment {
+  id        Int      @id @default(autoincrement())
+  labourId  Int
+  amount    Float
+  date      DateTime
+  remarks   String?  // Optional: add notes about the payment
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  labour    Labour   @relation(fields: [labourId], references: [id], onDelete: Cascade)
+  
+  @@index([labourId])
+  @@index([date])
 }
 
 enum ProjectMaterialStatus {

@@ -16,11 +16,14 @@ import materialRequestRoutes from './src/routes/materialRequestRoutes.js';
 import usageLogRoutes from './src/routes/usageLogRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 
-// ✅ NEW: Financial Management Routes
+// ✅ Financial Management Routes
 import financialRoutes from './src/routes/financialRoutes.js';
 
-//Contract Managment Routes
+// ✅ Contract Management Routes
 import contractRoutes from './src/routes/contractRoutes.js';
+
+// ✅ NEW: Labour Management Routes
+import labourRoutes from './src/routes/labourRoutes.js';
 
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
 import { PrismaClient } from './generated/prisma/index.js';
@@ -56,11 +59,14 @@ app.use('/api/material-requests', materialRequestRoutes);
 app.use('/api/usage-logs', usageLogRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// ========== NEW: FINANCIAL MANAGEMENT ROUTES ==========
+// ========== FINANCIAL MANAGEMENT ROUTES ==========
 app.use('/api/financial', financialRoutes);
 
-// ========== NEW: Contract MANAGEMENT ROUTES ==========
+// ========== CONTRACT MANAGEMENT ROUTES ==========
 app.use('/api/contracts', contractRoutes);
+
+// ========== NEW: LABOUR MANAGEMENT ROUTES ==========
+app.use('/api/labours', labourRoutes);
 
 // ========== EXISTING ENDPOINTS ==========
 app.get('/api/employees', 
@@ -154,6 +160,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📊 API available at http://localhost:${PORT}/api`);
   console.log(`💰 Financial API: http://localhost:${PORT}/api/financial`);
+  console.log(`👷 Labour API: http://localhost:${PORT}/api/labours`);
 });
 
 export default app;
