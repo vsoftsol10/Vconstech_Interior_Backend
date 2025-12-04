@@ -97,6 +97,7 @@ export const createProject = async (req, res) => {
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         status: 'PENDING',
+        actualProgress: 0, // ✅ Initialize with 0% progress
         companyId,
         assignedEngineerId: parseInt(assignedUserId)
       },
@@ -135,7 +136,6 @@ export const createProject = async (req, res) => {
     });
   }
 };
-// Replace your getProjectsByCompany function with this fixed version
 
 export const getProjectsByCompany = async (req, res) => {
   try {
@@ -374,6 +374,113 @@ export const updateProject = async (req, res) => {
   }
 };
 
+// ✅ NEW: Update project progress with role-based authorization
+export const updateProjectProgress = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { actualProgress } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const companyId = req.user.companyId;
+
+    console.log('=== Update Project Progress ===');
+    console.log('Project ID:', id);
+    console.log('User ID:', userId);
+    console.log('User Role:', userRole);
+    console.log('Progress:', actualProgress);
+
+    // Validate progress value
+    if (actualProgress === undefined || actualProgress === null) {
+      return res.status(400).json({ 
+        error: 'Progress value is required' 
+      });
+    }
+
+    const progress = parseInt(actualProgress);
+    if (isNaN(progress) || progress < 0 || progress > 100) {
+      return res.status(400).json({ 
+        error: 'Progress must be a number between 0 and 100' 
+      });
+    }
+
+    // Get project with company and engineer info
+    const project = await prisma.project.findFirst({
+      where: {
+        id: parseInt(id),
+        companyId: companyId
+      },
+      include: {
+        assignedEngineer: {
+          select: {
+            id: true,
+            name: true,
+            empId: true
+          }
+        }
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ 
+        error: 'Project not found' 
+      });
+    }
+
+    // ✅ AUTHORIZATION CHECK
+    // Admin: Can update any project
+    // Site Engineer: Can ONLY update assigned projects
+    if (userRole === 'Site_Engineer') {
+      if (project.assignedEngineerId !== userId) {
+        console.log('❌ Engineer not assigned to this project');
+        return res.status(403).json({ 
+          error: 'Access denied. You can only update progress for projects assigned to you.',
+          assignedEngineer: project.assignedEngineer?.name || 'None',
+          yourId: userId
+        });
+      }
+      console.log('✅ Engineer is assigned to this project');
+    } else if (userRole === 'Admin') {
+      console.log('✅ Admin has access to all projects');
+    } else {
+      return res.status(403).json({ 
+        error: 'Invalid user role' 
+      });
+    }
+
+    // Update the progress
+    const updatedProject = await prisma.project.update({
+      where: { id: parseInt(id) },
+      data: { actualProgress: progress },
+      include: {
+        assignedEngineer: {
+          select: {
+            id: true,
+            name: true,
+            empId: true,
+            phone: true,
+            alternatePhone: true
+          }
+        }
+      }
+    });
+
+    console.log('✅ Progress updated successfully:', updatedProject.actualProgress);
+
+    res.json({
+      success: true,
+      message: 'Project progress updated successfully',
+      project: updatedProject
+    });
+
+  } catch (error) {
+    console.error('Update progress error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update project progress',
+      details: error.message 
+    });
+  }
+};
+
 // Delete project
 export const deleteProject = async (req, res) => {
   try {
@@ -447,7 +554,7 @@ export const uploadProjectFile = async (req, res) => {
     const companyId = req.user.companyId;
     const userId = req.user.id;
     const userRole = req.user.role;
-    const userType = req.user.type; // 'user' or 'engineer'
+    const userType = req.user.type;
     const { documentType } = req.body;
 
     // Verify project exists and belongs to company
@@ -480,7 +587,6 @@ export const uploadProjectFile = async (req, res) => {
 
     const fileSize = req.file.size;
 
-    // ✅ Build file data based on uploader type
     const fileData = {
       projectId: parseInt(id),
       fileUrl: `/uploads/project-files/${req.file.filename}`,
@@ -489,20 +595,16 @@ export const uploadProjectFile = async (req, res) => {
       fileSize: fileSize
     };
 
-    // ✅ Set correct uploader field
-    // Engineer: uploadedByEngineerId (Int)
-    // Admin: uploadedBy (String/UUID)
     if (userType === 'engineer' || userRole === 'Site_Engineer') {
-      fileData.uploadedByEngineerId = userId; // Engineer ID (Int)
+      fileData.uploadedByEngineerId = userId;
       console.log('👷 Engineer upload - ID:', userId);
     } else {
-      fileData.uploadedBy = userId; // User/Admin ID (String)
+      fileData.uploadedBy = userId;
       console.log('👤 Admin upload - ID:', userId);
     }
 
     console.log('📝 Creating file with data:', fileData);
 
-    // ✅ Create file with appropriate include
     const file = await prisma.file.create({
       data: fileData,
       include: {
@@ -544,7 +646,6 @@ export const uploadProjectFile = async (req, res) => {
     console.error('💥 Upload file error:', error);
     console.error('Error stack:', error.stack);
     
-    // Clean up uploaded file if database save fails
     if (req.file) {
       const filePath = path.join(__dirname, '../../uploads/project-files', req.file.filename);
       if (fs.existsSync(filePath)) {
@@ -565,15 +666,11 @@ export const uploadProjectFile = async (req, res) => {
   }
 };
 
-
-
-
 export const getProjectFiles = async (req, res) => {
   try {
     const { id } = req.params;
     const companyId = req.user.companyId;
 
-    // Verify project belongs to user's company
     const project = await prisma.project.findFirst({
       where: {
         id: parseInt(id),
@@ -612,7 +709,6 @@ export const getProjectFiles = async (req, res) => {
       }
     });
 
-    // ✅ Format files to show uploader info correctly
     const formattedFiles = files.map(file => ({
       ...file,
       uploaderName: file.user?.name || file.engineer?.name || 'Unknown',
@@ -634,13 +730,11 @@ export const getProjectFiles = async (req, res) => {
   }
 };
 
-// Delete file
 export const deleteProjectFile = async (req, res) => {
   try {
     const { id, fileId } = req.params;
     const companyId = req.user.companyId;
 
-    // Verify project belongs to user's company
     const project = await prisma.project.findFirst({
       where: {
         id: parseInt(id),
@@ -654,7 +748,6 @@ export const deleteProjectFile = async (req, res) => {
       });
     }
 
-    // Get file info
     const file = await prisma.file.findFirst({
       where: {
         id: parseInt(fileId),
@@ -668,7 +761,6 @@ export const deleteProjectFile = async (req, res) => {
       });
     }
 
-    // Delete file from filesystem
     const filePath = path.join(__dirname, '../../', file.fileUrl);
     if (fs.existsSync(filePath)) {
       try {
@@ -679,7 +771,6 @@ export const deleteProjectFile = async (req, res) => {
       }
     }
 
-    // Delete from database
     await prisma.file.delete({
       where: { id: parseInt(fileId) }
     });

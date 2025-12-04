@@ -39,6 +39,7 @@ model Project {
   projectType        String
   location           String?
   assignedEngineerId Int?
+  actualProgress     Int                    @default(0) // ✅ NEW: Actual progress percentage (0-100)
   contracts          Contract[]
   files              File[]
   expenses           ProjectExpense[]
@@ -46,7 +47,7 @@ model Project {
   materialUsages     MaterialUsage[]
   projectMaterials   ProjectMaterial[]
   materialRequests   MaterialRequest[]
-  labours            Labour[]               // ✅ ADDED
+  labours            Labour[]
   company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assignments        ProjectAssignment[]
   assignedEngineer   Engineer?              @relation(fields: [assignedEngineerId], references: [id], onDelete: SetNull)

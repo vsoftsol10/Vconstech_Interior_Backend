@@ -7,7 +7,8 @@ import {
   getProjectsByCompany,
   uploadProjectFile,
   getProjectFiles,
-  deleteProjectFile
+  deleteProjectFile,
+  updateProjectProgress  // ✅ NEW: Import progress update function
 } from '../controllers/projectController.js';
 import { authenticateToken, authorizeRole } from '../middlewares/authMiddlewares.js';
 import { upload } from '../config/multerConfig.js';
@@ -37,7 +38,6 @@ const checkProjectAccess = async (req, res, next) => {
 
     // ✅ ADMINS: Have access to ALL projects in their company
     if (userRole === 'Admin') {
-      // Just verify the project belongs to their company
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
@@ -59,7 +59,6 @@ const checkProjectAccess = async (req, res, next) => {
 
     // ✅ ENGINEERS: Only have access to ASSIGNED projects
     if (userRole === 'Site_Engineer') {
-      // First, verify project exists and belongs to company
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
@@ -115,7 +114,7 @@ const checkProjectAccess = async (req, res, next) => {
       console.log('❌ Engineer not assigned to this project');
       return res.status(403).json({
         success: false,
-        error: 'Access denied. You are not assigned to this project. Only assigned engineers can upload files.'
+        error: 'Access denied. You are not assigned to this project.'
       });
     }
 
@@ -154,6 +153,11 @@ router.get('/:id', getProjectById);
 
 // Update project (Admin only)
 router.put('/:id', authorizeRole('Admin'), updateProject);
+
+// ✅ NEW: Update project progress
+// Admin: Can update any project progress
+// Site Engineer: Can ONLY update assigned project progress
+router.patch('/:id/progress', checkProjectAccess, updateProjectProgress);
 
 // Delete project (Admin only)
 router.delete('/:id', authorizeRole('Admin'), deleteProject);

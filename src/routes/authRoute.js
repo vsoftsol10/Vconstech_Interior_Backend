@@ -124,7 +124,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Find user - remove the include temporarily
+    // Find user
     const user = await prisma.user.findUnique({
       where: { email }
     });
@@ -171,11 +171,13 @@ router.post('/login', async (req, res) => {
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
+    // ✅ UPDATED: Add companyName at the top level for easy access
     res.status(200).json({
       message: 'Login successful',
       token,
       user: {
         ...userWithoutPassword,
+        companyName: company?.name || 'Company', // ✅ ADD THIS LINE
         company: company
       }
     });
