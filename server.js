@@ -26,10 +26,9 @@ import contractRoutes from './src/routes/contractRoutes.js';
 import labourRoutes from './src/routes/labourRoutes.js';
 
 import { authenticateToken, authorizeRole } from './src/middlewares/authMiddlewares.js';
-import { PrismaClient } from './generated/prisma/index.js';
+import { PrismaClient } from '@prisma/client';
+
 // ES module dirname workaround
-
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
